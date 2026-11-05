@@ -1,0 +1,142 @@
+rules_version = '2';
+
+// Guyub Firestore security rules.
+// Role and organization come from Firebase Auth custom claims:
+//   request.auth.token.role  -> "admin" | "organizer" | "committee" | "attendee"
+//   request.auth.token.orgId -> organization id (organizer and committee only)
+// Claims are set only by the Cloud Function `setUserClaims` (Admin SDK).
+// Clients cannot write claims, so these rules can trust them.
+//
+// Committee scope is per event: a committee member may act on an event only
+// if a document exists at events/{eventId}/committees/{uid}.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return request.auth.token.role;
+    }
+
+    function isAdmin() {
+      return signedIn() && role() == 'admin';
+    }
+
+    function isOrganizer() {
+      return signedIn() && role() == 'organizer';
+    }
+
+    function isCommittee() {
+      return signedIn() && role() == 'committee';
+    }
+
+    function sameOrg(orgId) {
+      return signedIn() && request.auth.token.orgId == orgId;
+    }
+
+    // True when the caller is a committee member assigned to this event.
+    function isAssignedCommittee(eventId) {
+      return isCommittee()
+        && exists(/databases/$(database)/documents/events/$(eventId)/committees/$(request.auth.uid));
+    }
+
+    // ---- users/{uid} -------------------------------------------------
+    // A user reads their own profile. Admin reads all.
+    // Only the Admin SDK writes users (role and orgId are sensitive).
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if false;
+    }
+
+    // ---- organizations/{orgId} --------------------------------------
+    // Created by admin. Members of the org can read their own org.
+    match /organizations/{orgId} {
+      allow read: if isAdmin() || sameOrg(orgId);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---- events/{eventId} -------------------------------------------
+    // Any signed-in user can browse active events.
+    // Organizer of the owning org manages drafts and events.
+    // Assigned committee reads the event it scans for.
+    match /events/{eventId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.status == 'active')
+        || sameOrg(resource.data.organization_id)
+        || isAssignedCommittee(eventId);
+
+      allow create: if isOrganizer()
+        && sameOrg(request.resource.data.organization_id);
+
+      allow update, delete: if isOrganizer()
+        && sameOrg(resource.data.organization_id)
+        && sameOrg(request.resource.data.organization_id);
+
+      // ---- events/{eventId}/committees/{uid} ----------------------
+      // Organizer assigns committee members to their own org's events.
+      // The Cloud Function enforces that the assignee's orgId matches.
+      match /committees/{uid} {
+        allow read: if isAdmin()
+          || request.auth.uid == uid
+          || (isOrganizer()
+              && sameOrg(get(/databases/$(database)/documents/events/$(eventId)).data.organization_id));
+
+        allow create, update: if isOrganizer()
+          && sameOrg(get(/databases/$(database)/documents/events/$(eventId)).data.organization_id)
+          && request.resource.data.organization_id == request.auth.token.orgId;
+
+        allow delete: if isOrganizer()
+          && sameOrg(get(/databases/$(database)/documents/events/$(eventId)).data.organization_id);
+      }
+    }
+
+    // ---- attendance/{attendanceId} ----------------------------------
+    // ID is `${eventId}_${uid}` so one person cannot register twice.
+    //
+    // Create: attendee registers self for an active, open event,
+    //         with privacy consent recorded, not yet checked in.
+    // Read:   attendee (own), admin, organizer of the org,
+    //         committee assigned to the event.
+    // Update: assigned committee may only set check-in fields, and only
+    //         to checked-in. Certificate and QR fields are Cloud Functions only.
+    // Delete: never from clients (retention is handled server-side).
+    match /attendance/{attendanceId} {
+
+      allow create: if signedIn()
+        && role() == 'attendee'
+        && attendanceId == request.resource.data.event_id + '_' + request.auth.uid
+        && request.resource.data.user_id == request.auth.uid
+        && request.resource.data.is_checked_in == false
+        && request.resource.data.certificate_issued == false
+        && request.resource.data.privacy_consent == true
+        && request.resource.data.keys().hasAll(['event_id', 'user_id', 'organization_id', 'privacy_consent', 'consent_at'])
+        && get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.status == 'active'
+        && get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.registration_open == true
+        && get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.organization_id == request.resource.data.organization_id;
+
+      allow read: if signedIn() && (
+        resource.data.user_id == request.auth.uid
+        || isAdmin()
+        || sameOrg(resource.data.organization_id)
+        || isAssignedCommittee(resource.data.event_id)
+      );
+
+      allow update: if isAssignedCommittee(resource.data.event_id)
+        && get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.status == 'active'
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['is_checked_in', 'checked_in_at', 'checked_in_by'])
+        && request.resource.data.is_checked_in == true
+        && request.resource.data.checked_in_by == request.auth.uid;
+
+      allow delete: if false;
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

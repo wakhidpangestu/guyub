@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+functions/lib/
+
+# Flutter / Dart
+apps/dashboard/.dart_tool/
+apps/dashboard/build/
+apps/dashboard/.flutter-plugins
+apps/dashboard/.flutter-plugins-dependencies
+apps/dashboard/.packages
+
+# Next.js (landing page, later)
+.next/
+out/
+
+# Firebase
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+.firebase/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+serviceAccount*.json
+*-adminsdk-*.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
