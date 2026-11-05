@@ -73,6 +73,10 @@ abstract interface class Backend {
   /// The attendee's registration for one event, or null.
   Stream<Registration?> watchRegistration(String eventId, String uid);
 
+  /// The ticket owner's QR signing key, or null if there is none.
+  /// Only the owner can read it (attendance_secrets rules).
+  Stream<String?> watchTicketKey(String eventId, String uid);
+
   /// The attendee's tickets with their events, by event date.
   Stream<List<Ticket>> watchTickets(String uid);
 

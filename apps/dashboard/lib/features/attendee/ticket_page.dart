@@ -62,7 +62,15 @@ class TicketPage extends StatelessWidget {
                           const SizedBox(height: 8),
                           const Text('This event is over.'),
                         ] else ...[
-                          RotatingTicketQr(qrToken: registration.qrToken, attendanceId: registration.attendanceId),
+                          StreamView<String?>(
+                            streamKey: registration.attendanceId,
+                            create: () => backend.watchTicketKey(eventId, uid),
+                            // Tickets issued before the key moved to its own document.
+                            errorText: 'This ticket cannot show a code. Cancel the registration and register again.',
+                            builder: (context, key) => key == null
+                                ? const ErrorNote('This ticket cannot show a code. Cancel the registration and register again.')
+                                : RotatingTicketQr(qrToken: key, attendanceId: registration.attendanceId),
+                          ),
                           const SizedBox(height: 16),
                           Text(session?.name ?? '', style: theme.textTheme.titleMedium),
                           const SizedBox(height: 8),

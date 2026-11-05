@@ -45,8 +45,10 @@ service firebase.storage {
     }
 
     // Event assets: public read (banners, twibbon overlays), org-scoped write.
+    // The certificate template may carry signatures, so only the event's
+    // organizers read it; Cloud Functions read it with the Admin SDK (audit L6).
     match /events/{eventId}/{file} {
-      allow read: if true;
+      allow read: if file != 'certificate-template.pdf' || canManageEvent(eventId);
       allow create, update: if canManageEvent(eventId) && isImageOrPdfUnder(5 * 1024 * 1024);
       allow delete: if canManageEvent(eventId);
     }

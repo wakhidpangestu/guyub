@@ -220,8 +220,7 @@ class FirebaseBackend implements Backend {
   /// Needs the (status, date) composite index in firestore.indexes.json.
   @override
   Stream<List<GuyubEvent>> watchUpcomingEvents() {
-    final now = DateTime.now();
-    final startOfToday = DateTime(now.year, now.month, now.day);
+    final startOfToday = startOfTodayWib(DateTime.now());
     return _events
         .where('status', isEqualTo: EventStatus.active.name)
         .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfToday))
@@ -241,6 +240,14 @@ class FirebaseBackend implements Backend {
       .limit(1)
       .snapshots()
       .map((s) => s.docs.isEmpty ? null : _registration(s.docs.first))
+      .mapErrors();
+
+  @override
+  Stream<String?> watchTicketKey(String eventId, String uid) => _db
+      .collection('attendance_secrets')
+      .doc('${eventId}_$uid')
+      .snapshots()
+      .map((d) => d.exists ? d.data()!['qr_token'] as String? : null)
       .mapErrors();
 
   @override
@@ -277,13 +284,14 @@ class FirebaseBackend implements Backend {
 
   static Registration _registration(_Doc d) {
     final data = d.data()!;
-    final registeredAt = data['registered_at'];
+    DateTime? time(Object? value) => value is Timestamp ? value.toDate() : null;
     return Registration(
       eventId: data['event_id'] as String,
       userId: data['user_id'] as String,
-      qrToken: data['qr_token'] as String? ?? '',
+      attendeeName: data['attendee_name'] as String?,
       isCheckedIn: data['is_checked_in'] == true,
-      registeredAt: registeredAt is Timestamp ? registeredAt.toDate() : null,
+      registeredAt: time(data['registered_at']),
+      checkedInAt: time(data['checked_in_at']),
     );
   }
 

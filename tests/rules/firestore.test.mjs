@@ -368,6 +368,33 @@ describe("attendance: check-in", () => {
   });
 });
 
+describe("ticket secrets (audit H2)", () => {
+  const secret = (persona) => getDoc(doc(db(persona), "attendance_secrets/evtA_att1"));
+
+  it("the ticket owner reads their QR key", async () => {
+    const snap = await assertSucceeds(secret(as.attendee));
+    if (snap.data().qr_token !== "secret-token") throw new Error("owner should see the token");
+  });
+
+  it("organizers, committee, admins, and other attendees cannot read it", async () => {
+    await assertFails(secret(as.organizer));
+    await assertFails(secret(as.committee));
+    await assertFails(secret(as.admin));
+    await assertFails(secret(as.otherAttendee));
+    await assertFails(secret(as.anonymous));
+  });
+
+  it("nobody writes a secret from the client", async () => {
+    await assertFails(setDoc(doc(db(as.attendee), "attendance_secrets/evtA_att1"), { user_id: "att1", qr_token: "x" }));
+    await assertFails(setDoc(doc(db(as.otherAttendee), "attendance_secrets/evtA_att2"), { user_id: "att2", qr_token: "x" }));
+  });
+
+  it("attendance itself carries no QR key", async () => {
+    const snap = await assertSucceeds(getDoc(doc(db(as.committee), "attendance/evtA_att1")));
+    if ("qr_token" in snap.data()) throw new Error("qr_token must not be on attendance");
+  });
+});
+
 describe("default deny", () => {
   it("unknown collections are closed", async () => {
     await assertFails(getDoc(doc(db(as.admin), "secrets/x")));

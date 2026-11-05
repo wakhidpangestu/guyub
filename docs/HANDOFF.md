@@ -26,7 +26,9 @@ Read `docs/SPEC.md` first. Its §0 decision log is locked. Setup and run steps a
 - **M3 attendee registration and tickets:**
   - Browse upcoming published events from all orgs (query `status == active`, `date >= today`; composite index `status, date`). Org names come from `organizations`, now readable by any signed-in user.
   - Event page with registration state (open, spots left, full, closed, registered), privacy consent dialog, register, cancel.
-  - `registerForEvent` / `cancelRegistration` callables: one transaction for consent, role, status, open registration, capacity, `registered_count`, and the ticket. Idempotent. Pure decisions in `src/registration.ts`.
+  - `registerForEvent` / `cancelRegistration` callables: one transaction for consent, role, status, open registration, capacity, `registered_count`, the ticket, and its secret. Idempotent. Pure decisions in `src/registration.ts`.
+  - The QR key lives in `attendance_secrets/{id}`, readable only by the ticket owner (audit H2). Attendance carries the attendee name only, no email (audit M1).
+  - Daily `retentionPurge` (03:00 WIB) and admin-only `runRetentionPurge` delete attendance and secrets 12 months after the event (audit H3).
   - Rules: clients can no longer create attendance; organizers cannot touch `registered_count`; drafts with registrations cannot be deleted; a registered attendee keeps reading the event after it leaves active.
   - Dynamic QR (`src/tickets.ts` and `lib/data/ticket_code.dart`): HMAC of a per-ticket token and a 30-second window. `verifyTicket` (valid, expired, invalid) is ready for M4.
   - My tickets list and ticket page (rotating QR with countdown, checked-in and completed states).

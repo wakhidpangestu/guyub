@@ -208,7 +208,8 @@ service cloud.firestore {
     //
     // Create: only the registerForEvent Cloud Function. It checks consent,
     //         registration state, and capacity in one transaction, and
-    //         issues the secret qr_token. Clients cannot do either safely.
+    //         issues the ticket secret (attendance_secrets). Clients cannot
+    //         do either safely.
     // Read:   attendee (own), admin, organizer of the org,
     //         committee assigned to the event.
     // Update: assigned committee may only set check-in fields, and only
@@ -235,6 +236,16 @@ service cloud.firestore {
         && request.resource.data.checked_in_by == request.auth.uid;
 
       allow delete: if false;
+    }
+
+    // ---- attendance_secrets/{attendanceId} ---------------------------
+    // The key that signs the rotating QR (functions/src/tickets.ts). Only the
+    // ticket owner reads it, to show their code. Organizers and committee
+    // must not: with the key they could mint valid tickets (audit H2).
+    // Written and deleted only by Cloud Functions.
+    match /attendance_secrets/{attendanceId} {
+      allow read: if signedIn() && resource.data.user_id == request.auth.uid;
+      allow write: if false;
     }
 
     // Deny everything else by default.

@@ -28,25 +28,29 @@ describe("M3 registration and tickets", () => {
     carol = await signIn("m3-carol@guyub.test");
   });
 
-  it("registers an attendee and issues a secret QR token", async () => {
+  it("registers an attendee; the QR key goes to a separate owner-only secret", async () => {
     const response = await register(alice, "m3-open");
     assert.equal(response.status, 200, JSON.stringify(response.body));
     assert.deepEqual(response.body.result, { status: "registered", attendanceId: `m3-open_${alice.uid}` });
 
     const ticket = await getDoc(`attendance/m3-open_${alice.uid}`);
-    assert.match(ticket.qr_token.stringValue, /^[A-Za-z0-9_-]{22}$/);
     assert.equal(ticket.privacy_consent.booleanValue, true);
     assert.ok(ticket.consent_at.timestampValue);
     assert.equal(ticket.is_checked_in.booleanValue, false);
-    assert.equal(ticket.attendee_email.stringValue, alice.email);
+    assert.equal(ticket.qr_token, undefined, "no QR key on attendance (audit H2)");
+    assert.equal(ticket.attendee_email, undefined, "no email on attendance (audit M1)");
+
+    const secret = await getDoc(`attendance_secrets/m3-open_${alice.uid}`);
+    assert.match(secret.qr_token.stringValue, /^[A-Za-z0-9_-]{22}$/);
+    assert.equal(secret.user_id.stringValue, alice.uid);
     assert.equal(await count("m3-open"), 1);
   });
 
   it("registering twice returns the same ticket and does not double count", async () => {
-    const before = (await getDoc(`attendance/m3-open_${alice.uid}`)).qr_token.stringValue;
+    const before = (await getDoc(`attendance_secrets/m3-open_${alice.uid}`)).qr_token.stringValue;
     const response = await register(alice, "m3-open");
     assert.equal(response.body.result.status, "existing");
-    assert.equal((await getDoc(`attendance/m3-open_${alice.uid}`)).qr_token.stringValue, before);
+    assert.equal((await getDoc(`attendance_secrets/m3-open_${alice.uid}`)).qr_token.stringValue, before);
     assert.equal(await count("m3-open"), 1);
   });
 
@@ -79,6 +83,7 @@ describe("M3 registration and tickets", () => {
     const response = await call("cancelRegistration", alice.token, { eventId: "m3-open" });
     assert.equal(response.status, 200, JSON.stringify(response.body));
     assert.equal(await getDoc(`attendance/m3-open_${alice.uid}`), null);
+    assert.equal(await getDoc(`attendance_secrets/m3-open_${alice.uid}`), null, "secret deleted with the ticket");
     assert.equal(await count("m3-open"), 1);
 
     assert.equal((await register(carol, "m3-open")).body.result.status, "registered");
@@ -90,5 +95,18 @@ describe("M3 registration and tickets", () => {
     assert.equal(errorStatus(await call("cancelRegistration", bob.token, { eventId: "m3-open" })), "FAILED_PRECONDITION");
     assert.equal(errorStatus(await call("cancelRegistration", alice.token, { eventId: "m3-open" })), "FAILED_PRECONDITION");
     assert.equal(await count("m3-open"), 2);
+  });
+
+  it("capacity holds when many people register at the same moment (audit L3)", async () => {
+    await putDoc("events/m3-rush", { organization_id: "m3-org", title: "Rush", created_by: "x", registered_count: 0,
+      status: "active", registration_open: true, capacity: 3 });
+    const crowd = await Promise.all(Array.from({ length: 8 }, (_, i) => signIn(`m3-rush-${i}@guyub.test`)));
+    const results = await Promise.all(crowd.map((who) => register(who, "m3-rush")));
+
+    const registered = results.filter((r) => r.body.result?.status === "registered").length;
+    const full = results.filter((r) => errorStatus(r) === "FAILED_PRECONDITION").length;
+    assert.equal(registered, 3, JSON.stringify(results.map((r) => r.body)));
+    assert.equal(full, 5);
+    assert.equal(await count("m3-rush"), 3);
   });
 });

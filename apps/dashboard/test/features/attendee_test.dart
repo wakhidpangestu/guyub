@@ -145,6 +145,14 @@ void main() {
       expect(find.byType(QrImageView), findsNothing);
     });
 
+    testWidgets('a ticket without a key explains how to fix it', (tester) async {
+      final backend = campus()..addEvent('talk', 'himatif', status: EventStatus.active);
+      backend.addRegistration('talk', withKey: false);
+      await attendeeAt(tester, '/attendee/tickets/talk', backend);
+      expect(find.textContaining('Cancel the registration and register again'), findsOneWidget);
+      expect(find.byType(QrImageView), findsNothing);
+    });
+
     testWidgets('empty state links to browsing', (tester) async {
       await attendeeAt(tester, '/attendee/tickets', campus());
       expect(find.text('No tickets yet.'), findsOneWidget);

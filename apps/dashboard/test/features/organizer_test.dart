@@ -110,6 +110,16 @@ void main() {
       expect(find.text('Publish'), findsNothing);
     });
 
+    testWidgets('unpublishing warns how many people hold tickets', (tester) async {
+      final backend = himatif()..addEvent('e1', 'himatif', status: EventStatus.active, registeredCount: 12);
+      await organizerAt(tester, '/organizer/events/e1', backend: backend);
+
+      await tester.tap(find.text('Move back to draft'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('12 people hold a ticket'), findsOneWidget);
+      expect(find.textContaining('nobody can check in'), findsOneWidget);
+    });
+
     testWidgets('deleting a draft asks first and returns to the list', (tester) async {
       final backend = himatif()..addEvent('e1', 'himatif', title: 'Scratch');
       final h = await organizerAt(tester, '/organizer/events/e1', backend: backend);

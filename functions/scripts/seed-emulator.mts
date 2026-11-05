@@ -136,13 +136,18 @@ await db.collection("attendance").doc(`demo-tech-talk_${uids.attendee}`).set({
   user_id: uids.attendee,
   organization_id: ORG_ID,
   attendee_name: "Sari Attendee",
-  attendee_email: "attendee@guyub.test",
-  qr_token: tickets.newQrToken(),
   is_checked_in: false,
   certificate_issued: false,
   privacy_consent: true,
   consent_at: FieldValue.serverTimestamp(),
   registered_at: FieldValue.serverTimestamp(),
+});
+// The QR key lives apart from attendance, readable only by the attendee.
+await db.collection("attendance_secrets").doc(`demo-tech-talk_${uids.attendee}`).set({
+  user_id: uids.attendee,
+  event_id: "demo-tech-talk",
+  qr_token: tickets.newQrToken(),
+  created_at: FieldValue.serverTimestamp(),
 });
 console.log(`${events.length} demo events; committee@guyub.test assigned to "Tech Talk"; attendee@guyub.test registered for it`);
 

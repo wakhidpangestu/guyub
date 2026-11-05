@@ -5,6 +5,7 @@ import { logger } from "firebase-functions";
 import * as functionsV1 from "firebase-functions/v1";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { HttpsError, onCall, type CallableRequest } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { applyRole, RoleInputError, validateRoleInput, type Role, type RoleInput } from "./claims";
 import { REGION } from "./config";
@@ -17,6 +18,7 @@ import {
   type Actor,
 } from "./members";
 import { attendanceIdFor, decideCancellation, decideRegistration, parseRegistrationRequest } from "./registration";
+import { purgeExpiredAttendance } from "./retention";
 import { newQrToken } from "./tickets";
 
 initializeApp();
@@ -126,8 +128,10 @@ export const removeMember = onCall(async (request) => {
 
     const auth = getAuth();
     const db = getFirestore();
-    const target = await auth.getUser(uid).catch(() => {
-      throw new RoleInputError("No account with this uid.");
+    // Only "not found" means a bad uid. Any other Auth error is a real failure.
+    const target = await auth.getUser(uid).catch((error: { code?: string }) => {
+      if (error.code === "auth/user-not-found") throw new RoleInputError("No account with this uid.");
+      throw error;
     });
     decideRemove(caller, actorOf(target));
 
@@ -193,8 +197,12 @@ export const onUserCreated = functionsV1
  * Registers the caller for an event and issues their QR ticket.
  *
  * Runs in a transaction so capacity holds under concurrent registrations:
- * the event's `registered_count` and the attendance document change together.
- * Idempotent: registering twice returns the existing ticket.
+ * the event's `registered_count`, the attendance document, and the ticket
+ * secret change together. Idempotent: registering twice returns the existing ticket.
+ *
+ * The QR signing key lives in attendance_secrets/{id}, readable only by the
+ * ticket owner. Organizers and committee read attendance but never the key,
+ * so they cannot mint valid tickets (audit H2).
  */
 export const registerForEvent = onCall(async (request) => {
   const caller = callerOf(request);
@@ -205,6 +213,7 @@ export const registerForEvent = onCall(async (request) => {
     const user = await getAuth().getUser(uid);
     const eventRef = db.collection("events").doc(eventId);
     const attendanceRef = db.collection("attendance").doc(attendanceIdFor(eventId, uid));
+    const secretRef = db.collection("attendance_secrets").doc(attendanceRef.id);
 
     const status = await db.runTransaction(async (tx) => {
       const [event, attendance] = await Promise.all([tx.get(eventRef), tx.get(attendanceRef)]);
@@ -223,14 +232,20 @@ export const registerForEvent = onCall(async (request) => {
         event_id: eventId,
         user_id: uid,
         organization_id: event.get("organization_id"),
+        // Name only: check-in needs nothing else (audit M1). Organizers who
+        // need contact details use the Admin SDK paths (exports, certificates).
         attendee_name: user.displayName ?? null,
-        attendee_email: user.email ?? null,
-        qr_token: newQrToken(),
         is_checked_in: false,
         certificate_issued: false,
         privacy_consent: true,
         consent_at: FieldValue.serverTimestamp(),
         registered_at: FieldValue.serverTimestamp(),
+      });
+      tx.create(secretRef, {
+        user_id: uid,
+        event_id: eventId,
+        qr_token: newQrToken(),
+        created_at: FieldValue.serverTimestamp(),
       });
       tx.update(eventRef, { registered_count: FieldValue.increment(1) });
       return "registered";
@@ -261,12 +276,30 @@ export const cancelRegistration = onCall(async (request) => {
         event.exists ? (event.get("status") as string) : null,
       );
       tx.delete(attendanceRef);
+      tx.delete(db.collection("attendance_secrets").doc(attendanceRef.id));
       if (event.exists) tx.update(eventRef, { registered_count: FieldValue.increment(-1) });
     });
     return { ok: true };
   } catch (error) {
     toHttpsError(error);
   }
+});
+
+/**
+ * Daily retention purge (03:00 WIB): deletes attendance records and ticket
+ * secrets 12 months after the event, as the privacy notice promises.
+ */
+export const retentionPurge = onSchedule({ schedule: "every day 03:00", timeZone: "Asia/Jakarta" }, async () => {
+  const result = await purgeExpiredAttendance(getFirestore(), new Date());
+  logger.info("Retention purge", result);
+});
+
+/** Runs the retention purge now. Admin only; for demos and incident response. */
+export const runRetentionPurge = onCall(async (request) => {
+  if (request.auth?.token.role !== "admin") {
+    throw new HttpsError("permission-denied", "Admin only.");
+  }
+  return purgeExpiredAttendance(getFirestore(), new Date());
 });
 
 // Next milestones:

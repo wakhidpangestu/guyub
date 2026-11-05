@@ -145,7 +145,11 @@ class _StatusActions extends StatelessWidget {
               backend,
               EventStatus.draft,
               title: 'Move back to draft?',
-              message: 'Attendees will no longer see this event, and registration closes.',
+              message: event.registeredCount == 0
+                  ? 'Attendees will no longer see this event, and registration closes.'
+                  : '${event.registeredCount} ${event.registeredCount == 1 ? 'person holds' : 'people hold'} a ticket. '
+                      'They keep it, but nobody can check in until you publish the event again. '
+                      'Registration closes.',
               confirmLabel: 'Move to draft',
               success: 'Moved back to draft.',
             ),

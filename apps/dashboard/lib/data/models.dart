@@ -30,6 +30,15 @@ class Organization {
   }
 }
 
+/// Midnight today in WIB (UTC+7, no daylight saving), as a UTC instant.
+/// "Upcoming" uses this boundary for every viewer, so attendees in WITA or
+/// WIT, or with a wrong device clock zone, see the same list (audit L5).
+DateTime startOfTodayWib(DateTime now) {
+  const offset = Duration(hours: 7);
+  final wib = now.toUtc().add(offset);
+  return DateTime.utc(wib.year, wib.month, wib.day).subtract(offset);
+}
+
 /// Turns a display name into an organization ID, for example
 /// "HIMATIF ITB 2026" becomes "himatif-itb-2026".
 String slugify(String name) {
@@ -138,25 +147,30 @@ class GuyubEvent {
       );
 }
 
-/// An attendee's registration for one event: their ticket.
+/// An attendee's registration for one event.
+///
+/// The QR signing key is not here: it lives in attendance_secrets, readable
+/// only by the ticket owner (see [Backend.watchTicketKey], audit H2).
 class Registration {
   const Registration({
     required this.eventId,
     required this.userId,
-    required this.qrToken,
+    this.attendeeName,
     this.isCheckedIn = false,
     this.registeredAt,
+    this.checkedInAt,
   });
 
   final String eventId;
   final String userId;
-
-  /// Secret per ticket. Only used to sign the rotating QR code.
-  final String qrToken;
+  final String? attendeeName;
   final bool isCheckedIn;
   final DateTime? registeredAt;
+  final DateTime? checkedInAt;
 
   String get attendanceId => '${eventId}_$userId';
+
+  String get label => (attendeeName?.isNotEmpty ?? false) ? attendeeName! : 'Attendee';
 }
 
 /// A registration with its event, for the ticket list.

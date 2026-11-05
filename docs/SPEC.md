@@ -80,8 +80,10 @@ events/{eventId}/committees/{uid}      NEW  (committee assignment)
 
 attendance/{attendanceId}              (ID = `${eventId}_${uid}`)  CHANGED: deterministic ID
   event_id, user_id, organization_id   NEW
-  qr_token                             CHANGED (M3): random secret per ticket, see §5
-  attendee_name, attendee_email        NEW (M3) for the committee and certificates
+  attendee_name                        NEW (M3) name only; no email (audit M1)
+
+attendance_secrets/{attendanceId}      NEW (M3, audit H2) owner-read-only, Cloud Functions write
+  user_id, event_id, qr_token (random secret that signs the rotating QR, see §5), created_at
   is_checked_in, checked_in_at, checked_in_by   NEW
   certificate_issued, certificate_url  NEW
   registered_at                        NEW
@@ -131,11 +133,11 @@ Generated from `certificate_template_url` with the attendee's name. Stored at `c
 
 Dynamic QR, built in M3 (`functions/src/tickets.ts`, `apps/dashboard/lib/data/ticket_code.dart`):
 
-- Each registration has a random 128-bit `qr_token`, created by `registerForEvent`. Only the attendee, their org's organizers, and the event's committee can read it.
+- Each registration has a random 128-bit `qr_token`, created by `registerForEvent` in `attendance_secrets/{attendanceId}`. Only the ticket owner can read it. Organizers and committee read `attendance` but never the key, so they cannot mint tickets (audit H2).
 - The QR shows `G1.{attendanceId}.{window}.{signature}`, where `window = floor(unix seconds / 30)` and `signature` = first 16 hex chars of HMAC-SHA256(key = `qr_token`, message = `{attendanceId}.{window}`).
 - The code changes every 30 seconds. Check-in accepts windows within ±2 of the server clock, so a screenshot stops working after about a minute.
 - Dart and Node implementations are tested against the same vector (cross-checked with `openssl`). A QR decoded from the release web build was verified by the server code: valid at the time, expired two minutes later, invalid with another token.
-- No server secret is needed: the per-ticket token is the key, and it is only readable by the people listed above.
+- No server secret is needed: the per-ticket token is the key, and only its owner and Cloud Functions can read it.
 - Check-in is online only (locked, §0 decision 5).
 
 ## 6. Security checklist

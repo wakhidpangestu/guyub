@@ -21,6 +21,9 @@ class FakeBackend implements Backend {
   /// attendanceId (`eventId_uid`) -> registration.
   final registrations = <String, Registration>{};
 
+  /// attendanceId -> QR signing key (attendance_secrets).
+  final ticketKeys = <String, String>{};
+
   /// The signed-in user for [register]. Must match the Harness uid and role.
   String currentUid = 'u1';
   UserRole currentRole = UserRole.attendee;
@@ -79,14 +82,15 @@ class FakeBackend implements Backend {
     return event;
   }
 
-  Registration addRegistration(String eventId, {String? uid, bool checkedIn = false}) {
+  Registration addRegistration(String eventId, {String? uid, bool checkedIn = false, bool withKey = true, String? name}) {
     final registration = Registration(
       eventId: eventId,
       userId: uid ?? currentUid,
-      qrToken: 'token-$eventId',
+      attendeeName: name,
       isCheckedIn: checkedIn,
     );
     registrations[registration.attendanceId] = registration;
+    if (withKey) ticketKeys[registration.attendanceId] = 'token-$eventId';
     return registration;
   }
 
@@ -243,6 +247,9 @@ class FakeBackend implements Backend {
   Stream<Registration?> watchRegistration(String eventId, String uid) => _watch(() => registrations['${eventId}_$uid']);
 
   @override
+  Stream<String?> watchTicketKey(String eventId, String uid) => _watch(() => ticketKeys['${eventId}_$uid']);
+
+  @override
   Stream<List<Ticket>> watchTickets(String uid) => _watch(() => [
         for (final registration in registrations.values)
           if (registration.userId == uid && events.containsKey(registration.eventId))
@@ -277,6 +284,7 @@ class FakeBackend implements Backend {
       throw const BackendFailure('You have already checked in, so the registration cannot be cancelled.');
     }
     registrations.remove(id);
+    ticketKeys.remove(id);
     final event = events[eventId];
     if (event != null) events[eventId] = event.withRegisteredCount(event.registeredCount - 1);
     _changed();

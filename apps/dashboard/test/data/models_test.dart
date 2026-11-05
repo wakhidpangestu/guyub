@@ -55,6 +55,23 @@ void main() {
     });
   });
 
+  group('startOfTodayWib', () {
+    test('is 17:00 UTC of the previous day', () {
+      expect(startOfTodayWib(DateTime.utc(2026, 11, 5, 3)), DateTime.utc(2026, 11, 4, 17));
+    });
+
+    test('rolls over at WIB midnight, not UTC midnight', () {
+      // 23:30 WIB on Nov 5 is 16:30 UTC; 00:30 WIB on Nov 6 is 17:30 UTC.
+      expect(startOfTodayWib(DateTime.utc(2026, 11, 5, 16, 30)), DateTime.utc(2026, 11, 4, 17));
+      expect(startOfTodayWib(DateTime.utc(2026, 11, 5, 17, 30)), DateTime.utc(2026, 11, 5, 17));
+    });
+
+    test('does not depend on the device time zone', () {
+      final instant = DateTime.utc(2026, 11, 5, 3);
+      expect(startOfTodayWib(instant.toLocal()), startOfTodayWib(instant));
+    });
+  });
+
   group('EventDraft validation', () {
     test('title is required and at most 120 characters', () {
       expect(EventDraft.titleError('   '), isNotNull);

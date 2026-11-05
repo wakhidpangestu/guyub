@@ -112,3 +112,13 @@ describe("dynamic QR tickets", () => {
     assert.notEqual(a, newQrToken());
   });
 });
+
+describe("retention", async () => {
+  const retention = (await import("../lib/retention.js")).default;
+
+  it("cutoff is 365 days before now", () => {
+    const now = new Date("2027-12-01T00:00:00Z");
+    assert.equal(retention.retentionCutoff(now).toISOString(), "2026-12-01T00:00:00.000Z");
+    assert.equal(retention.RETENTION_DAYS, 365);
+  });
+});

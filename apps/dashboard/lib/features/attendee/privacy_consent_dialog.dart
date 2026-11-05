@@ -49,9 +49,10 @@ class _PrivacyConsentDialogState extends State<_PrivacyConsentDialog> {
             children: [
               Text('Privacy notice', style: theme.textTheme.titleSmall),
               const SizedBox(height: 12),
-              point(Icons.badge_outlined, 'Your name and email are shared with ${widget.orgName} to run this event.'),
+              point(Icons.badge_outlined, 'Your name is shared with ${widget.orgName} and its committee to run this event.'),
+              point(Icons.mail_outline, 'Your email is not shared with the organizer. Guyub uses it only to send your ticket and certificate.'),
               point(Icons.qr_code_2, 'Your ticket and check-in time are recorded for attendance and your certificate.'),
-              point(Icons.schedule, 'Attendance records are kept for 12 months, then deleted.'),
+              point(Icons.schedule, 'Attendance records are deleted automatically 12 months after the event.'),
               point(Icons.cancel_outlined, 'You can cancel your registration any time before check-in.'),
               const SizedBox(height: 4),
               CheckboxListTile(

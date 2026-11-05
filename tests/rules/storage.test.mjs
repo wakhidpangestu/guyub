@@ -21,6 +21,7 @@ beforeEach(async () => {
   await env.withSecurityRulesDisabled(async (ctx) => {
     await uploadBytes(ref(ctx.storage(), "events/evtA/banner.png"), png, { contentType: "image/png" });
     await uploadBytes(ref(ctx.storage(), "certificates/evtA/att1.pdf"), pdf, { contentType: "application/pdf" });
+    await uploadBytes(ref(ctx.storage(), "events/evtA/certificate-template.pdf"), pdf, { contentType: "application/pdf" });
   });
 });
 
@@ -53,6 +54,14 @@ describe("event assets", () => {
 
   it("anyone can read event banners", async () => {
     await assertSucceeds(getMetadata(ref(storage(as.anonymous), "events/evtA/banner.png")));
+  });
+
+  it("only the event's organizers read the certificate template (audit L6)", async () => {
+    const template = (persona) => getMetadata(ref(storage(persona), "events/evtA/certificate-template.pdf"));
+    await assertSucceeds(template(as.organizer));
+    await assertFails(template(as.anonymous));
+    await assertFails(template(as.attendee));
+    await assertFails(template(as.otherOrganizer));
   });
 });
 

@@ -94,6 +94,7 @@ export async function seed(env) {
       "invites/boss@example.com": { email: "boss@example.com", role: "organizer", organization_id: "himatif" },
       "invites/bem@example.com": { email: "bem@example.com", role: "committee", organization_id: "bem" },
       "attendance/evtA_att1": attendance("evtA", "att1", "himatif", now),
+      "attendance_secrets/evtA_att1": { user_id: "att1", event_id: "evtA", qr_token: "secret-token" },
       "attendance/evtB_att1": attendance("evtB", "att1", "bem", now),
     };
     for (const [path, data] of Object.entries(writes)) {

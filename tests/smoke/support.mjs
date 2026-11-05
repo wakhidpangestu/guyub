@@ -50,11 +50,12 @@ export async function setClaimsAsOwner(uid, claims) {
 
 const docUrl = (path) => `http://${hosts.firestore}/v1/projects/${PROJECT}/databases/(default)/documents/${path}`;
 
-/** Converts plain values to Firestore REST fields. Strings, numbers, booleans, null only. */
+/** Converts plain values to Firestore REST fields. Strings, numbers, booleans, dates, null only. */
 function toFields(data) {
   const fields = {};
   for (const [key, value] of Object.entries(data)) {
     if (value === null) fields[key] = { nullValue: null };
+    else if (value instanceof Date) fields[key] = { timestampValue: value.toISOString() };
     else if (typeof value === "boolean") fields[key] = { booleanValue: value };
     else if (typeof value === "number") fields[key] = { integerValue: String(value) };
     else fields[key] = { stringValue: String(value) };
