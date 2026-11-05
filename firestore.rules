@@ -17,8 +17,9 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Users without a role claim are attendees (fresh Google sign-ups).
     function role() {
-      return request.auth.token.role;
+      return request.auth.token.get('role', 'attendee');
     }
 
     function isAdmin() {
@@ -34,7 +35,7 @@ service cloud.firestore {
     }
 
     function sameOrg(orgId) {
-      return signedIn() && request.auth.token.orgId == orgId;
+      return signedIn() && request.auth.token.get('orgId', null) == orgId;
     }
 
     // True when the caller is a committee member assigned to this event.
@@ -86,7 +87,7 @@ service cloud.firestore {
 
         allow create, update: if isOrganizer()
           && sameOrg(get(/databases/$(database)/documents/events/$(eventId)).data.organization_id)
-          && request.resource.data.organization_id == request.auth.token.orgId;
+          && request.resource.data.organization_id == request.auth.token.get('orgId', null);
 
         allow delete: if isOrganizer()
           && sameOrg(get(/databases/$(database)/documents/events/$(eventId)).data.organization_id);

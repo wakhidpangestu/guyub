@@ -1,5 +1,5 @@
 name: guyub_dashboard
-description: "A new Flutter project."
+description: "Guyub web dashboard for admins, organizers, committee, and attendees."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -40,6 +40,8 @@ dependencies:
   cloud_functions: ^7.0.1
   firebase_storage: ^14.0.1
   go_router: ^18.1.3
+  flutter_web_plugins:
+    sdk: flutter
 
 dev_dependencies:
   flutter_test:

@@ -1,10 +1,14 @@
 rules_version = '2';
 
 // Storage layout:
-//   events/{eventId}/banner.*            organizer of the event's org writes
-//   events/{eventId}/certificate-template.pdf   organizer writes
-//   sponsors/{orgId}/logo.*              org members write
-//   certificates/{eventId}/{uid}.pdf     Cloud Functions write; owner reads
+//   events/{eventId}/banner.*                   organizer of the event's org writes
+//   events/{eventId}/certificate-template.pdf   organizer of the event's org writes
+//   events/{eventId}/twibbon-overlay.png        organizer of the event's org writes
+//   sponsors/{orgId}/logo.*                     org members write
+//   certificates/{eventId}/{uid}.pdf            Cloud Functions write; owner reads
+//
+// Event ownership is checked against Firestore (cross-service rules), so an
+// organizer cannot write assets for another organization's event.
 
 service firebase.storage {
   match /b/{bucket}/o {
@@ -13,37 +17,54 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    // Users without a role claim are attendees. Matches firestore.rules.
+    function role() {
+      return request.auth.token.get('role', 'attendee');
+    }
+
     function isAdmin() {
-      return signedIn() && request.auth.token.role == 'admin';
+      return signedIn() && role() == 'admin';
     }
 
     function isOrganizer() {
-      return signedIn() && request.auth.token.role == 'organizer';
+      return signedIn() && role() == 'organizer';
     }
 
     function sameOrg(orgId) {
-      return signedIn() && request.auth.token.orgId == orgId;
+      return signedIn() && request.auth.token.get('orgId', null) == orgId;
     }
 
-    // Event assets: public read (banners), org-scoped write, size and type limits.
+    function canManageEvent(eventId) {
+      return isAdmin() || (isOrganizer() && sameOrg(
+        firestore.get(/databases/(default)/documents/events/$(eventId)).data.organization_id));
+    }
+
+    function isImageOrPdfUnder(maxBytes) {
+      return request.resource.size < maxBytes
+        && request.resource.contentType.matches('image/.*|application/pdf');
+    }
+
+    // Event assets: public read (banners, twibbon overlays), org-scoped write.
     match /events/{eventId}/{file} {
       allow read: if true;
-      allow write: if (isAdmin() || isOrganizer())
-        && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*|application/pdf');
+      allow create, update: if canManageEvent(eventId) && isImageOrPdfUnder(5 * 1024 * 1024);
+      allow delete: if canManageEvent(eventId);
     }
 
     // Sponsor logos: org-scoped.
     match /sponsors/{orgId}/{file} {
       allow read: if signedIn();
-      allow write: if (isAdmin() || sameOrg(orgId))
+      allow create, update: if (isAdmin() || sameOrg(orgId))
         && request.resource.size < 2 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+      allow delete: if isAdmin() || sameOrg(orgId);
     }
 
     // Certificates: owner reads own file. Only Admin SDK (Cloud Functions) writes.
-    match /certificates/{eventId}/{uid}.pdf {
-      allow read: if signedIn() && request.auth.uid == uid;
+    // Wildcards must cover a whole path segment, so match the file name and
+    // compare it to "<uid>.pdf".
+    match /certificates/{eventId}/{fileName} {
+      allow read: if signedIn() && fileName == request.auth.uid + '.pdf';
       allow write: if false;
     }
 

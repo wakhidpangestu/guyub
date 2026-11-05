@@ -12,7 +12,8 @@
     "build:watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions,firestore,auth",
     "deploy": "firebase deploy --only functions",
-    "test": "echo \"no tests yet\" && exit 0"
+    "set-role": "npm run build && node --experimental-strip-types scripts/set-role.mts",
+    "test": "npm run build && node --experimental-strip-types --test test/claims.test.mts"
   },
   "devDependencies": {
     "typescript": "^7.0.2"

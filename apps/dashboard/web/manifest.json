@@ -1,11 +1,11 @@
 {
-    "name": "guyub_dashboard",
-    "short_name": "guyub_dashboard",
+    "name": "Guyub",
+    "short_name": "Guyub",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0F766E",
+    "theme_color": "#0F766E",
+    "description": "Event operations for communities and campus organizations.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

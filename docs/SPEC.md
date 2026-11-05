@@ -41,6 +41,8 @@ Items marked **DECIDE** need an owner decision. Each has a recommended default s
 
 Rules:
 - Claims are the only source of role. Firestore and Storage rules read `request.auth.token.role` and `orgId`.
+- A user without a `role` claim is an attendee. Rules use `token.get('role', 'attendee')`; the app uses `UserRole.fromClaim`.
+- After a role change, `applyRole` writes `users/{uid}.updated_at`. The app watches that field and refreshes the ID token, so the new dashboard opens without signing out.
 - Clients never write claims or `users/{uid}.role`. Only Cloud Functions (Admin SDK) do.
 - A committee account belongs to exactly one org. It can scan only events it is assigned to (locked, §0 decision 3).
 
@@ -127,6 +129,8 @@ Generated from `certificate_template_url` with the attendee's name. Stored at `c
 
 M0–M4 is the 1-week core MVP sprint. M5–M6, polish, and the demo video run until 16 Dec (§0 decision 7).
 
+Status: M0 done except rules tests (needs Java for the emulator). M1 done (code and tests; not yet run end-to-end against the emulators).
+
 | Milestone | Content | Exit criterion |
 |---|---|---|
 | M0 | Repo, Firebase project, emulators, rules, functions skeleton | `firebase emulators:start` runs; rules tests pass |
@@ -150,7 +154,7 @@ Locked in §0 decision 2. Details:
 ## 9. Bootstrap
 
 - First admin is created by a one-off script run with a service account, not through the UI.
-- Script lives at `functions/scripts/bootstrap-admin.ts` (**TODO**).
+- Script: `functions/scripts/set-role.mts` (`npm run set-role`). Works against the emulators (`--emulator`) or a real project (`--project`). See README.
 
 ## 10. Open decisions and gaps
 
