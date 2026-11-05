@@ -42,7 +42,7 @@ Items marked **DECIDE** need an owner decision. Each has a recommended default s
 Rules:
 - Claims are the only source of role. Firestore and Storage rules read `request.auth.token.role` and `orgId`.
 - A user without a `role` claim is an attendee. Rules use `token.get('role', 'attendee')`; the app uses `UserRole.fromClaim`.
-- After a role change, `applyRole` writes `users/{uid}.updated_at`. The app watches that field and refreshes the ID token, so the new dashboard opens without signing out.
+- After a role change, `applyRole` mirrors the role into `users/{uid}`. The app compares that with the ID token's claims and refreshes the token when they differ, so the new dashboard opens without signing out. Comparing values also catches a role applied before the app subscribed (an invite at first sign-in).
 - Clients never write claims or `users/{uid}.role`. Only Cloud Functions (Admin SDK) do.
 - A committee account belongs to exactly one org. It can scan only events it is assigned to (locked, §0 decision 3).
 
@@ -51,11 +51,17 @@ Rules:
 Changes from proposal v1 are marked **NEW** or **CHANGED**.
 
 ```
-organizations/{orgId}                  NEW
-  name, slug, created_at, status ("active"|"disabled")
+organizations/{orgId}                  NEW  (document ID = slug, never changes)
+  name, slug, status ("active"), created_by, created_at
 
-users/{uid}
+users/{uid}                            written only by Cloud Functions
   role, organization_id, display_name, email, created_at, updated_at
+  (mirrors the custom claims; rules read it to check committee assignees)
+
+invites/{email}                        NEW (M2)  written only by inviteMember
+  email (lowercase), role ("organizer"|"committee"), organization_id,
+  invited_by, created_at
+  (one pending invite per email; consumed by onUserCreated at first sign-in)
 
 events/{eventId}
   organization_id                      NEW (required for rules)
@@ -68,7 +74,8 @@ events/{eventId}
   created_by, created_at, updated_at
 
 events/{eventId}/committees/{uid}      NEW  (committee assignment)
-  organization_id, assigned_by, assigned_at
+  uid (for collection-group queries), organization_id,
+  display_name, email (denormalized for lists), assigned_by, assigned_at
 
 attendance/{attendanceId}              (ID = `${eventId}_${uid}`)  CHANGED: deterministic ID
   event_id, user_id, organization_id   NEW
@@ -88,10 +95,15 @@ Notes:
 
 ## 4. Key flows
 
-**Organizer onboarding**
-1. Admin creates org (`organizations/{orgId}`).
-2. Admin creates organizer account by email, then calls `setUserClaims` with `role: organizer`, `orgId`.
-3. Organizer logs in and gets an invite-free dashboard.
+**Adding people by email (M2)** — same flow for admin to organizer and organizer to committee
+1. Admin creates the org (`organizations/{slug}`) from the dashboard.
+2. Admin (organizer) enters a Google account email. The app calls `inviteMember`.
+3. If an account exists, the role applies now (`granted`). Otherwise `invites/{email}` is stored (`invited`).
+4. At first sign-in, `onUserCreated` applies the invite and deletes it. The app sees the profile role differ from the token and refreshes it, so the person lands on the right dashboard without signing in again.
+5. Guards (`decideInvite`): organizers add committee to their own org only; nobody changes an admin; a member of another org must be removed there first; an organizer cannot demote a fellow organizer.
+6. `removeMember` returns the person to attendee and deletes all their committee assignments.
+
+Not built: invite emails. The inviter tells the person to sign in.
 
 **Event lifecycle**
 `draft` → `active` (published, visible to attendees) → `completed` (after event date; locks check-in).
@@ -129,7 +141,7 @@ Generated from `certificate_template_url` with the attendee's name. Stored at `c
 
 M0–M4 is the 1-week core MVP sprint. M5–M6, polish, and the demo video run until 16 Dec (§0 decision 7).
 
-Status: M0 done (rules tests: `npm run test:rules`). M1 done and verified end-to-end on the emulators (`npm run test:smoke`, plus a browser run). Next: M2.
+Status: M0, M1, and M2 done and verified end-to-end on the emulators (`npm run test:smoke`, plus browser runs of every M2 write path). Next: M3.
 
 | Milestone | Content | Exit criterion |
 |---|---|---|

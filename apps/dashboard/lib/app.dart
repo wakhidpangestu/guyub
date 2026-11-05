@@ -4,13 +4,18 @@ import 'package:go_router/go_router.dart';
 import 'auth/auth_controller.dart';
 import 'auth/auth_scope.dart';
 import 'auth/auth_state.dart';
+import 'data/backend.dart';
+import 'data/backend_scope.dart';
 import 'routing/app_router.dart';
 import 'ui/theme.dart';
 
 class GuyubApp extends StatefulWidget {
-  const GuyubApp({super.key, required this.authController, this.initialLocation});
+  const GuyubApp({super.key, required this.authController, required this.backend, this.initialLocation});
 
   final AuthController authController;
+
+  /// Data access for every page. FirebaseBackend in the app, a fake in tests.
+  final Backend backend;
 
   /// Overrides the browser URL. Used by tests.
   final String? initialLocation;
@@ -51,14 +56,17 @@ class _GuyubAppState extends State<GuyubApp> {
 
   @override
   Widget build(BuildContext context) {
-    return AuthScope(
-      controller: widget.authController,
-      child: MaterialApp.router(
-        title: 'Guyub',
-        debugShowCheckedModeBanner: false,
-        theme: GuyubTheme.light(),
-        darkTheme: GuyubTheme.dark(),
-        routerConfig: _router,
+    return BackendScope(
+      backend: widget.backend,
+      child: AuthScope(
+        controller: widget.authController,
+        child: MaterialApp.router(
+          title: 'Guyub',
+          debugShowCheckedModeBanner: false,
+          theme: GuyubTheme.light(),
+          darkTheme: GuyubTheme.dark(),
+          routerConfig: _router,
+        ),
       ),
     );
   }

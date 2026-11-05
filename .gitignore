@@ -32,6 +32,7 @@ serviceAccount*.json
 # Flutter env files hold real project config. Only the emulator and example files are shared.
 apps/dashboard/env/*.json
 !apps/dashboard/env/emulator.json
+!apps/dashboard/env/e2e.json
 !apps/dashboard/env/example.json
 
 # OS / editor

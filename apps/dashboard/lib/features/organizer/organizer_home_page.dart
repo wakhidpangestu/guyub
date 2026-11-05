@@ -12,25 +12,25 @@ class OrganizerHomePage extends StatelessWidget {
       role: UserRole.organizer,
       intro: 'Plan events, assign your committee, and track attendance.',
       features: [
-        PlannedFeature(
+        Feature(
           icon: Icons.event_outlined,
           title: 'Events',
           description: 'Create drafts, publish events, and open registration.',
-          milestone: 'M2',
+          route: '/organizer/events',
         ),
-        PlannedFeature(
+        Feature(
           icon: Icons.groups_outlined,
           title: 'Committee',
-          description: 'Assign committee members to each event for QR check-in.',
-          milestone: 'M2',
+          description: 'Add committee members by email. Assign them to events for QR check-in.',
+          route: '/organizer/committee',
         ),
-        PlannedFeature(
+        Feature(
           icon: Icons.workspace_premium_outlined,
           title: 'Certificates',
           description: 'Upload a certificate template. Certificates are emailed on check-in.',
           milestone: 'M5',
         ),
-        PlannedFeature(
+        Feature(
           icon: Icons.table_chart_outlined,
           title: 'Export to Google Sheets',
           description: 'Send registrations and attendance to a Google Sheet.',

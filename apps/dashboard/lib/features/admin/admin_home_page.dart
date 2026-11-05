@@ -12,19 +12,13 @@ class AdminHomePage extends StatelessWidget {
       role: UserRole.admin,
       intro: 'Manage organizations and organizer accounts across Guyub.',
       features: [
-        PlannedFeature(
+        Feature(
           icon: Icons.apartment_outlined,
           title: 'Organizations',
-          description: 'Create and disable organizations (Ormawa, communities).',
-          milestone: 'M2',
+          description: 'Create organizations (Ormawa, communities) and choose their organizers.',
+          route: '/admin/organizations',
         ),
-        PlannedFeature(
-          icon: Icons.manage_accounts_outlined,
-          title: 'Organizer accounts',
-          description: 'Grant the organizer role to a user for one organization.',
-          milestone: 'M2',
-        ),
-        PlannedFeature(
+        Feature(
           icon: Icons.insights_outlined,
           title: 'Platform metrics',
           description: 'Events, registrations, and check-ins across all organizations.',

@@ -7,36 +7,51 @@ Read `docs/SPEC.md` first. Its §0 decision log is locked. Setup and run steps a
 - **M0 foundation:** repo layout, `firebase.json`, `.firebaserc` (default `demo-guyub` for emulators), Firestore and Storage rules, Cloud Functions in TypeScript (Node 22, region `asia-southeast2`).
 - **M1 auth and role routing:**
   - Google Sign-In (`signInWithPopup`). Role and `orgId` come from ID token claims. No claim means attendee, in the app and in the rules.
-  - `AuthController` watches `users/{uid}.updated_at` and refreshes the token after a server-side role change.
   - `resolveRedirect` (pure function, `lib/routing/redirect.dart`): splash while loading, login when signed out, role home after login, `/forbidden` for another role's area. Deep links survive login. Off-site and transient `from` targets are ignored.
-  - Four role areas (`/admin`, `/organizer`, `/committee`, `/attendee`) with "Planned · Mx" cards for unbuilt features.
-  - Config via `--dart-define-from-file` (`env/emulator.json` committed; real env files ignored). Missing config shows a setup screen.
-  - Functions: `setUserClaims` (admin only, validates org exists), `onUserCreated` (creates attendee profile, never overwrites), shared logic in `src/claims.ts`.
-  - `npm run set-role` script bootstraps the first admin and seeds demo roles.
-- **Rule fixes in M1:** missing `role` claim no longer denies attendees; Storage certificate path used an invalid partial wildcard; Storage event assets are now checked against the event's org through `firestore.get()`.
-- **Live role change:** the app follows a server-side role change to the new dashboard (no "No access" detour).
-- **Dev tooling:** `firebase-tools` and the rules test kit are root dev dependencies (`npx firebase`, no global install). `npm run emulators` keeps data in `.emulator-data/`. `npm run seed` creates one Google demo account per role. `scripts/dev.ps1` starts the whole stack on Windows.
-- **Rules fix found by tests:** committee members read every attendance record and draft event of their org through the `sameOrg` branch. That branch is now organizer-only.
-- **Tests:** functions 7, Flutter 52, rules 40, M1 smoke 6. All passing. `flutter analyze` clean.
+  - Live role change: `AuthController` compares the role mirrored in `users/{uid}` with the token's claims and refreshes the token when they differ. The app then moves to the new dashboard.
+  - Functions: `setUserClaims` (admin only), `onUserCreated` (creates the attendee profile, never overwrites), shared logic in `src/claims.ts`.
+- **M2 organizations, events, committee:**
+  - Admin: create organizations (ID = slug, transaction refuses duplicates), add organizers by email.
+  - Organizer: event list, create (always a draft), edit, publish, open/close registration, move back to draft, mark completed (final), delete drafts (assignments deleted in the same batch).
+  - Organizer: committee members by email, remove, cancel pending invites, assign/unassign per event.
+  - Committee: "Your events" via a collection-group query on `committees` filtered by `uid`.
+  - Functions: `inviteMember` (grant now, or store `invites/{email}` for first sign-in), `removeMember` (back to attendee, deletes assignments). Decisions are pure functions in `src/members.ts`.
+  - `onUserCreated` applies a pending invite for a verified email.
+  - Rules: event shape and status transitions validated; registration only while published; committee assignees must be committee members of the event's org (checked against `users/{uid}`); organizers read their org's member profiles and invites.
+  - Data layer: `Backend` interface (`lib/data/backend.dart`), `FirebaseBackend`, in-memory `FakeBackend` for widget tests.
+- **Bugs found and fixed in M2:**
+  - Invite applied before the app subscribed (first sign-in) was missed, leaving the user as attendee for up to an hour. Fixed by comparing values instead of reacting to changes.
+  - `StreamView` treated a null value ("not found") as "still loading" and spun forever.
+  - Deleting a draft left its committee assignments behind.
+- **Dev tooling:** root dev deps (`npx firebase`), `npm run emulators` with saved data, `npm run seed` (demo accounts plus three demo events), `scripts/dev.ps1`. Tests run on separate ports (`firebase.test.json`) so they never touch dev data.
+- **Tests:** functions 24, Flutter 85, rules 65, smoke 14. All passing. `flutter analyze` clean.
 
-## Verified end-to-end (emulators, headless Chrome)
+## Verified end-to-end (emulators, headless Chrome, release build)
 
-- Deep link `/organizer` while signed out, then login page, Google popup, `organizer@guyub.test`, and the Organizer dashboard. Checked in the release build (Hosting emulator) and in debug `flutter run` on port 8090.
-- Signed in as attendee, then `set-role --role committee`. The open app switched to the Committee dashboard within about 6 seconds.
+- M1: deep link, Google popup, role dashboards, live role change.
+- M2, through the real UI and real rules:
+  - Organizer creates an event in the form; the document has the right shape (integer capacity, UTC date, draft).
+  - Publish, open registration, and assign a committee member from the dropdown.
+  - Committee member sees the assigned event and is blocked from organizer pages.
+  - Admin creates an organization in the dialog and invites an organizer by email.
+  - A brand-new account with that email signs in for the first time and lands on the Organizer dashboard within 4 seconds.
 
 ## Next, in order (SPEC §7)
 
-1. **M2:** Admin creates organizations and grants organizer. Organizer event CRUD. Committee assignment writes `events/{id}/committees/{uid}`; a Cloud Function checks the assignee's `orgId`.
-2. **M3:** Attendee browse, register (consent toggle, `${eventId}_${uid}` ID), QR ticket.
-3. **M4:** Committee scanner. Check-in writes only `is_checked_in`, `checked_in_at`, `checked_in_by`.
-4. **M5:** Certificate function and email on check-in. Batch sends (Gmail SMTP caps).
-5. **M6:** Twibbon (client-side canvas), Google Sheets export, Next.js landing, deploy.
+1. **M3:** Attendee browse active events, register (privacy consent toggle, `${eventId}_${uid}` ID), QR ticket (`issueQrHash` callable).
+2. **M4:** Committee scanner for assigned events. Check-in writes only `is_checked_in`, `checked_in_at`, `checked_in_by`.
+3. **M5:** Certificate function and email on check-in. Batch sends (Gmail SMTP caps).
+4. **M6:** Twibbon (client-side canvas), Google Sheets export, platform metrics, Next.js landing, deploy.
 
-Every new collection or rule change needs a case in `tests/rules/`. Every new callable needs a smoke test in `tests/smoke/`.
+Every new collection or rule change needs a case in `tests/rules/`. Every new callable needs a smoke test in `tests/smoke/`. Every new page needs a widget test with `FakeBackend`.
 
 ## Open items
 
-- Real Firebase project not created yet. `.firebaserc` default is `demo-guyub`.
+- Real Firebase project not created yet. `.firebaserc` default is `demo-guyub`. Deploying needs `firestore.indexes.json` (includes the collection-group index on `committees.uid`).
+- Invites are not emailed. Could reuse the M5 email pipeline.
+- Organizations cannot be disabled. Enforcing a disabled org in rules costs one extra read per request; decide before adding.
+- Event banner upload is not in the UI yet (Storage rules are ready).
+- Capacity is stored but not enforced at registration (M3).
 - Demo access for judges: Google-only sign-in means judges sign in as attendees. Organizer and committee demo needs `set-role` on their account, or pre-made demo accounts.
 - Retention purge (12 months) is not written.
 - Email provider: Trigger Email extension vs Nodemailer. SPEC §0 decision 2 allows either.

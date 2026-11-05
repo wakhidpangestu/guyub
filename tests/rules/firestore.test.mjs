@@ -1,8 +1,20 @@
 import { after, before, beforeEach, describe, it } from "node:test";
 import { assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
-import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import {
+  collection,
+  collectionGroup,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 
-import { as, attendance, createEnv, seed } from "./helpers.mjs";
+import { as, assignment, attendance, createEnv, event, seed } from "./helpers.mjs";
 
 let env;
 const db = (persona) => persona(env).firestore();
@@ -37,17 +49,71 @@ describe("users", () => {
     await assertFails(setDoc(doc(db(as.attendee), "users/att1"), { role: "admin" }));
     await assertFails(setDoc(doc(db(as.admin), "users/att1"), { role: "admin" }));
   });
+
+  it("organizer lists own org's members, not other orgs' or attendees", async () => {
+    const members = query(collection(db(as.organizer), "users"), where("organization_id", "==", "himatif"));
+    await assertSucceeds(getDocs(members));
+    await assertSucceeds(getDoc(doc(db(as.organizer), "users/comA")));
+    await assertFails(getDoc(doc(db(as.organizer), "users/comX")));
+    await assertFails(getDoc(doc(db(as.organizer), "users/att1")));
+  });
+
+  it("committee cannot list org members", async () => {
+    const members = query(collection(db(as.committee), "users"), where("organization_id", "==", "himatif"));
+    await assertFails(getDocs(members));
+  });
 });
 
 describe("organizations", () => {
+  const org = (overrides = {}) => ({ name: "New Org", slug: "new-org", status: "active", created_by: "admin1", ...overrides });
+
   it("organizer reads own org only", async () => {
     await assertSucceeds(getDoc(doc(db(as.organizer), "organizations/himatif")));
     await assertFails(getDoc(doc(db(as.organizer), "organizations/bem")));
   });
 
   it("only admin creates organizations", async () => {
-    await assertSucceeds(setDoc(doc(db(as.admin), "organizations/new"), { name: "New" }));
-    await assertFails(setDoc(doc(db(as.organizer), "organizations/new2"), { name: "New" }));
+    await assertSucceeds(setDoc(doc(db(as.admin), "organizations/new-org"), org()));
+    await assertFails(setDoc(doc(db(as.organizer), "organizations/new-org"), org({ created_by: "org1" })));
+  });
+
+  it("document ID must be the slug and a valid slug", async () => {
+    await assertFails(setDoc(doc(db(as.admin), "organizations/other"), org()));
+    await assertFails(setDoc(doc(db(as.admin), "organizations/Bad Slug"), org({ slug: "Bad Slug" })));
+  });
+
+  it("rejects too-short names and extra fields", async () => {
+    await assertFails(setDoc(doc(db(as.admin), "organizations/new-org"), org({ name: "X" })));
+    await assertFails(setDoc(doc(db(as.admin), "organizations/new-org"), { ...org(), plan: "pro" }));
+  });
+
+  it("organizations are never deleted from the client", async () => {
+    await assertFails(deleteDoc(doc(db(as.admin), "organizations/himatif")));
+  });
+});
+
+describe("invites", () => {
+  it("organizer reads own org's invites only", async () => {
+    await assertSucceeds(getDoc(doc(db(as.organizer), "invites/pending@example.com")));
+    await assertFails(getDoc(doc(db(as.organizer), "invites/bem@example.com")));
+    await assertSucceeds(getDocs(query(collection(db(as.organizer), "invites"), where("organization_id", "==", "himatif"))));
+  });
+
+  it("organizer cancels committee invites but not organizer invites", async () => {
+    await assertSucceeds(deleteDoc(doc(db(as.organizer), "invites/pending@example.com")));
+    await assertFails(deleteDoc(doc(db(as.organizer), "invites/boss@example.com")));
+    await assertSucceeds(deleteDoc(doc(db(as.admin), "invites/boss@example.com")));
+  });
+
+  it("nobody writes invites from the client", async () => {
+    const invite = { email: "x@example.com", role: "committee", organization_id: "himatif" };
+    await assertFails(setDoc(doc(db(as.organizer), "invites/x@example.com"), invite));
+    await assertFails(setDoc(doc(db(as.admin), "invites/x@example.com"), invite));
+  });
+
+  it("attendees and committee cannot read invites", async () => {
+    await assertFails(getDoc(doc(db(as.attendee), "invites/pending@example.com")));
+    await assertFails(getDoc(doc(db(as.committee), "invites/pending@example.com")));
   });
 });
 
@@ -69,9 +135,9 @@ describe("events", () => {
   });
 
   it("organizer creates events only in own org", async () => {
-    await assertSucceeds(setDoc(doc(db(as.organizer), "events/evtNew"), { organization_id: "himatif", status: "draft" }));
-    await assertFails(setDoc(doc(db(as.organizer), "events/evtNew2"), { organization_id: "bem", status: "draft" }));
-    await assertFails(setDoc(doc(db(as.attendee), "events/evtNew3"), { organization_id: "himatif", status: "draft" }));
+    await assertSucceeds(setDoc(doc(db(as.organizer), "events/evtNew"), event("himatif")));
+    await assertFails(setDoc(doc(db(as.organizer), "events/evtNew2"), event("bem")));
+    await assertFails(setDoc(doc(db(as.attendee), "events/evtNew3"), event("himatif", { created_by: "att1" })));
   });
 
   it("organizer cannot edit another org's event or move an event to another org", async () => {
@@ -81,23 +147,120 @@ describe("events", () => {
   });
 });
 
+describe("events: validation", () => {
+  const create = (data) => setDoc(doc(db(as.organizer), "events/evtNew"), data);
+
+  it("new events must start as drafts with registration closed", async () => {
+    await assertFails(create(event("himatif", { status: "active" })));
+    await assertFails(create(event("himatif", { registration_open: true })));
+  });
+
+  it("created_by must be the caller", async () => {
+    await assertFails(create(event("himatif", { created_by: "someone-else" })));
+  });
+
+  it("rejects missing or oversized title", async () => {
+    await assertFails(create(event("himatif", { title: "" })));
+    await assertFails(create(event("himatif", { title: "x".repeat(121) })));
+    const { title, ...noTitle } = event("himatif");
+    await assertFails(create(noTitle));
+  });
+
+  it("rejects a bad date, status, capacity, or unknown field", async () => {
+    await assertFails(create(event("himatif", { date: "tomorrow" })));
+    await assertFails(create(event("himatif", { status: "archived" })));
+    await assertFails(create(event("himatif", { capacity: 0 })));
+    await assertFails(create(event("himatif", { capacity: 1.5 })));
+    await assertFails(create(event("himatif", { price: 10000 })));
+  });
+
+  it("accepts a capacity", async () => {
+    await assertSucceeds(create(event("himatif", { capacity: 150 })));
+  });
+});
+
+describe("events: status transitions", () => {
+  const setStatus = (id, status, registration_open = false) =>
+    updateDoc(doc(db(as.organizer), `events/${id}`), { status, registration_open });
+
+  it("draft publishes to active", async () => {
+    await assertSucceeds(setStatus("evtDraft", "active"));
+  });
+
+  it("active goes back to draft or forward to completed", async () => {
+    await assertSucceeds(setStatus("evtA", "draft"));
+    await assertSucceeds(setStatus("evtA", "active", true));
+    await assertSucceeds(setStatus("evtA", "completed"));
+  });
+
+  it("draft cannot skip to completed", async () => {
+    await assertFails(setStatus("evtDraft", "completed"));
+  });
+
+  it("completed is final", async () => {
+    await assertFails(setStatus("evtDone", "active"));
+    await assertFails(setStatus("evtDone", "draft"));
+    await assertSucceeds(updateDoc(doc(db(as.organizer), "events/evtDone"), { title: "Done (typo fixed)" }));
+  });
+
+  it("registration opens only on active events", async () => {
+    await assertFails(setStatus("evtDraft", "draft", true));
+    await assertFails(updateDoc(doc(db(as.organizer), "events/evtA"), { status: "completed", registration_open: true }));
+  });
+
+  it("only drafts are deleted", async () => {
+    await assertSucceeds(deleteDoc(doc(db(as.organizer), "events/evtDraft")));
+    await assertFails(deleteDoc(doc(db(as.organizer), "events/evtA")));
+    await assertFails(deleteDoc(doc(db(as.organizer), "events/evtDone")));
+  });
+});
+
 describe("committee assignment", () => {
-  it("organizer assigns committee to own org's event", async () => {
-    await assertSucceeds(
-      setDoc(doc(db(as.organizer), "events/evtA/committees/comB"), { organization_id: "himatif", assigned_by: "org1" }),
+  const assign = (persona, eventId, uid, overrides) =>
+    setDoc(doc(db(persona), `events/${eventId}/committees/${uid}`), assignment(uid, "himatif", overrides));
+
+  it("organizer assigns own org's committee member to own org's event", async () => {
+    await assertSucceeds(assign(as.organizer, "evtA", "comB"));
+  });
+
+  it("assignee must be a committee member of the event's org", async () => {
+    await assertFails(assign(as.organizer, "evtA", "att2"));
+    await assertFails(assign(as.organizer, "evtA", "org1"));
+    await assertFails(
+      setDoc(doc(db(as.organizer), "events/evtA/committees/comX"), assignment("comX", "bem")),
     );
+  });
+
+  it("uid field must match the document ID, assigned_by must be the caller", async () => {
+    await assertFails(assign(as.organizer, "evtA", "comB", { uid: "comA" }));
+    await assertFails(assign(as.organizer, "evtA", "comB", { assigned_by: "someone" }));
   });
 
   it("other org's organizer cannot assign", async () => {
     await assertFails(
-      setDoc(doc(db(as.otherOrganizer), "events/evtA/committees/comX"), { organization_id: "bem", assigned_by: "org2" }),
+      setDoc(doc(db(as.otherOrganizer), "events/evtA/committees/comX"), assignment("comX", "bem", { assigned_by: "org2" })),
     );
   });
 
   it("committee cannot assign itself", async () => {
-    await assertFails(
-      setDoc(doc(db(as.unassignedCommittee), "events/evtA/committees/comB"), { organization_id: "himatif" }),
-    );
+    await assertFails(assign(as.unassignedCommittee, "evtA", "comB", { assigned_by: "comB" }));
+  });
+
+  it("organizer removes an assignment", async () => {
+    await assertSucceeds(deleteDoc(doc(db(as.organizer), "events/evtA/committees/comA")));
+    await assertFails(deleteDoc(doc(db(as.otherOrganizer), "events/evtA/committees/comA")));
+  });
+
+  it("committee lists only its own assignments across events", async () => {
+    const mine = query(collectionGroup(db(as.committee), "committees"), where("uid", "==", "comA"));
+    await assertSucceeds(getDocs(mine));
+    const theirs = query(collectionGroup(db(as.committee), "committees"), where("uid", "==", "comB"));
+    await assertFails(getDocs(theirs));
+  });
+
+  it("assigned committee reads the event; unassigned committee cannot read a draft", async () => {
+    await assertSucceeds(getDoc(doc(db(as.committee), "events/evtA")));
+    await assertFails(getDoc(doc(db(as.unassignedCommittee), "events/evtDraft")));
   });
 });
 

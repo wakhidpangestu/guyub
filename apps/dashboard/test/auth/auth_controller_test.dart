@@ -30,23 +30,49 @@ void main() {
     expect(state.orgId, 'himatif');
   });
 
-  test('refreshes claims when the role changes server-side', () async {
+  test('refreshes claims when the profile role is ahead of the token', () async {
     repo.emit(const SignedIn(uid: 'u1', role: UserRole.attendee));
     await flush();
-    expect(repo.watchedRoleUid, 'u1');
+    expect(repo.watchedProfileUid, 'u1');
 
-    repo.emitRoleChanged();
+    repo.emitProfile(const ProfileRole(UserRole.committee, 'himatif'));
     await flush();
     expect(repo.refreshCalls, 1);
   });
 
-  test('stops watching role changes after sign-out', () async {
+  test('a role applied before the app subscribed is still picked up', () async {
+    // For example an invite applied by onUserCreated at first sign-in.
+    repo.initialProfile = const ProfileRole(UserRole.committee, 'himatif');
+    repo.emit(const SignedIn(uid: 'u1', role: UserRole.attendee));
+    await flush();
+    expect(repo.refreshCalls, 1);
+  });
+
+  test('does not refresh when the profile matches the token', () async {
+    repo.initialProfile = const ProfileRole(UserRole.attendee, null);
+    repo.emit(const SignedIn(uid: 'u1', role: UserRole.attendee));
+    await flush();
+    expect(repo.refreshCalls, 0);
+  });
+
+  test('refreshes once per target role, so a stuck mismatch cannot loop', () async {
+    repo.emit(const SignedIn(uid: 'u1', role: UserRole.attendee));
+    await flush();
+    repo.emitProfile(const ProfileRole(UserRole.committee, 'himatif'));
+    await flush();
+    repo.emit(const SignedIn(uid: 'u1', role: UserRole.attendee)); // token still old
+    repo.emitProfile(const ProfileRole(UserRole.committee, 'himatif'));
+    await flush();
+    expect(repo.refreshCalls, 1);
+  });
+
+  test('stops watching the profile after sign-out', () async {
     repo.emit(const SignedIn(uid: 'u1', role: UserRole.attendee));
     await flush();
     repo.emit(const SignedOut());
     await flush();
 
-    repo.emitRoleChanged();
+    repo.emitProfile(const ProfileRole(UserRole.committee, 'himatif'));
     await flush();
     expect(repo.refreshCalls, 0);
   });

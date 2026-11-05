@@ -60,11 +60,74 @@ await db.collection("organizations").doc(ORG_ID).set(
 );
 console.log(`organizations/${ORG_ID} ready`);
 
+const uids: Record<string, string> = {};
 for (const persona of personas) {
   const uid = await googleSignIn(persona.email, persona.name);
   const input = claims.validateRoleInput({ uid, role: persona.role, orgId: "orgId" in persona ? persona.orgId : undefined });
   await claims.applyRole({ auth, db }, input);
+  // The profile is normally written by onUserCreated; write it here too in
+  // case the Functions emulator is still loading.
+  await db.collection("users").doc(uid).set({ email: persona.email, display_name: persona.name }, { merge: true });
+  uids[persona.role] = uid;
   console.log(`${persona.role.padEnd(9)} ${persona.email}`);
 }
+
+// Demo events for HIMATIF: one published, one draft, one finished.
+const day = 24 * 60 * 60 * 1000;
+const at = (offsetDays: number, hour: number) => {
+  const date = new Date(Date.now() + offsetDays * day);
+  date.setHours(hour, 0, 0, 0);
+  return date;
+};
+const events = [
+  {
+    id: "demo-tech-talk",
+    title: "Tech Talk: Building with Firebase",
+    description: "An evening talk on shipping campus apps with Firebase and Flutter.",
+    location: "Aula Timur ITB",
+    date: at(7, 19),
+    capacity: 150,
+    status: "active",
+    registration_open: true,
+  },
+  {
+    id: "demo-workshop",
+    title: "Flutter Web Workshop",
+    description: "Hands-on session. Bring a laptop.",
+    location: "Lab Komputer Labtek V",
+    date: at(21, 9),
+    capacity: 40,
+    status: "draft",
+    registration_open: false,
+  },
+  {
+    id: "demo-orientation",
+    title: "New Member Orientation",
+    description: "",
+    location: "Sekre HIMATIF",
+    date: at(-14, 13),
+    capacity: null,
+    status: "completed",
+    registration_open: false,
+  },
+];
+for (const { id, ...data } of events) {
+  await db.collection("events").doc(id).set({
+    ...data,
+    organization_id: ORG_ID,
+    created_by: uids.organizer,
+    created_at: FieldValue.serverTimestamp(),
+    updated_at: FieldValue.serverTimestamp(),
+  });
+}
+await db.collection("events").doc("demo-tech-talk").collection("committees").doc(uids.committee).set({
+  uid: uids.committee,
+  organization_id: ORG_ID,
+  display_name: "Budi Committee",
+  email: "committee@guyub.test",
+  assigned_by: uids.organizer,
+  assigned_at: FieldValue.serverTimestamp(),
+});
+console.log(`${events.length} demo events; committee@guyub.test assigned to "Tech Talk"`);
 
 console.log("\nDone. In the app, click Continue with Google and pick one of these accounts.");

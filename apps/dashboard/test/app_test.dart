@@ -3,27 +3,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:guyub_dashboard/app.dart';
 import 'package:guyub_dashboard/auth/auth_controller.dart';
+import 'package:guyub_dashboard/auth/auth_repository.dart';
 import 'package:guyub_dashboard/auth/auth_state.dart';
 import 'package:guyub_dashboard/auth/user_role.dart';
 
 import 'support/fake_auth_repository.dart';
+import 'support/fake_backend.dart';
 
 void main() {
   late FakeAuthRepository repo;
   late AuthController controller;
 
-  setUp(() {
-    repo = FakeAuthRepository();
-    controller = AuthController(repo);
-  });
+  setUp(() => repo = FakeAuthRepository());
 
-  tearDown(() => controller.dispose());
-
+  // The controller is created inside the test body, so its stream
+  // subscriptions run in the widget test's fake-async zone and settle with
+  // pumpAndSettle.
   Future<void> pumpApp(WidgetTester tester, {String? at}) async {
+    controller = AuthController(repo);
+    addTearDown(controller.dispose);
     tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(GuyubApp(authController: controller, initialLocation: at));
+    await tester.pumpWidget(GuyubApp(authController: controller, backend: FakeBackend(), initialLocation: at));
     await tester.pump();
   }
 
@@ -99,7 +101,7 @@ void main() {
     expect(find.widgetWithText(Chip, 'Attendee'), findsOneWidget);
 
     // Server sets the committee claim; the refreshed token arrives.
-    repo.emitRoleChanged();
+    repo.emitProfile(const ProfileRole(UserRole.committee, 'himatif'));
     await tester.pumpAndSettle();
     expect(repo.refreshCalls, 1);
     repo.emit(const SignedIn(uid: 'u1', role: UserRole.committee, orgId: 'himatif', displayName: 'Rina'));

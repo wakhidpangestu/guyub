@@ -31,16 +31,19 @@ class FirebaseAuthRepository implements AuthRepository {
     );
   }
 
-  /// `applyRole` in Cloud Functions writes `users/{uid}.updated_at` after it
-  /// sets claims. A change after the first snapshot means the role changed.
+  /// `applyRole` in Cloud Functions mirrors the claims into `users/{uid}`.
   @override
-  Stream<void> roleChanged(String uid) => _firestore
+  Stream<ProfileRole> watchProfileRole(String uid) => _firestore
       .collection('users')
       .doc(uid)
       .snapshots()
-      .map((snapshot) => snapshot.data()?['updated_at'])
-      .distinct()
-      .skip(1);
+      .where((snapshot) => snapshot.exists)
+      .map((snapshot) {
+        final data = snapshot.data()!;
+        final orgId = data['organization_id'];
+        return ProfileRole(UserRole.fromClaim(data['role']), orgId is String ? orgId : null);
+      })
+      .distinct();
 
   @override
   Future<void> signInWithGoogle() async {

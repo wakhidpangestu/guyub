@@ -5,6 +5,7 @@ import 'app.dart';
 import 'auth/auth_controller.dart';
 import 'auth/firebase_auth_repository.dart';
 import 'config/firebase_bootstrap.dart';
+import 'data/firebase_backend.dart';
 import 'ui/config_error_app.dart';
 
 Future<void> main() async {
@@ -20,5 +21,5 @@ Future<void> main() async {
     return;
   }
 
-  runApp(GuyubApp(authController: AuthController(FirebaseAuthRepository())));
+  runApp(GuyubApp(authController: AuthController(FirebaseAuthRepository()), backend: FirebaseBackend()));
 }

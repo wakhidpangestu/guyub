@@ -45,18 +45,53 @@ service cloud.firestore {
     }
 
     // ---- users/{uid} -------------------------------------------------
-    // A user reads their own profile. Admin reads all.
+    // A user reads their own profile. Admin reads all. An organizer reads
+    // profiles of their own org's members (to manage the committee).
     // Only the Admin SDK writes users (role and orgId are sensitive).
     match /users/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow read: if signedIn() && (
+        request.auth.uid == uid
+        || isAdmin()
+        || (isOrganizer() && sameOrg(resource.data.organization_id))
+      );
       allow write: if false;
     }
 
     // ---- organizations/{orgId} --------------------------------------
-    // Created by admin. Members of the org can read their own org.
+    // Created by admin. The document ID is the slug. Members of the org can
+    // read their own org. Organizations are never deleted from the client.
     match /organizations/{orgId} {
+      function isValidOrgName(data) {
+        return data.name is string && data.name.size() >= 2 && data.name.size() <= 80;
+      }
+
       allow read: if isAdmin() || sameOrg(orgId);
-      allow create, update, delete: if isAdmin();
+
+      allow create: if isAdmin()
+        && orgId.matches('^[a-z0-9][a-z0-9-]{1,39}$')
+        && request.resource.data.keys().hasOnly(['name', 'slug', 'status', 'created_by', 'created_at'])
+        && isValidOrgName(request.resource.data)
+        && request.resource.data.slug == orgId
+        && request.resource.data.status == 'active'
+        && request.resource.data.created_by == request.auth.uid;
+
+      allow update: if isAdmin()
+        && isValidOrgName(request.resource.data)
+        && request.resource.data.slug == resource.data.slug;
+
+      allow delete: if false;
+    }
+
+    // ---- invites/{email} ----------------------------------------------
+    // Pending role invites for people who have not signed in yet.
+    // Written only by the inviteMember Cloud Function and consumed by
+    // onUserCreated. Organizers see their org's invites and may cancel
+    // committee invites.
+    match /invites/{email} {
+      allow read: if isAdmin() || (isOrganizer() && sameOrg(resource.data.organization_id));
+      allow delete: if isAdmin()
+        || (isOrganizer() && sameOrg(resource.data.organization_id) && resource.data.role == 'committee');
+      allow create, update: if false;
     }
 
     // ---- events/{eventId} -------------------------------------------
@@ -64,35 +99,94 @@ service cloud.firestore {
     // Organizer of the owning org manages drafts and events.
     // Assigned committee reads the event it scans for.
     match /events/{eventId} {
+      // Shape of an event document. Mirrors EventDraft in the Flutter app.
+      function isValidEvent(data) {
+        return data.keys().hasAll(['organization_id', 'title', 'status', 'registration_open', 'date', 'created_by'])
+          && data.keys().hasOnly([
+            'organization_id', 'title', 'description', 'location', 'date', 'capacity',
+            'status', 'registration_open', 'banner_url', 'certificate_template_url',
+            'created_by', 'created_at', 'updated_at'
+          ])
+          && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+          && data.status in ['draft', 'active', 'completed']
+          && data.registration_open is bool
+          // Registration can only be open while the event is published.
+          && (data.registration_open == false || data.status == 'active')
+          && data.date is timestamp
+          && (!('description' in data) || (data.description is string && data.description.size() <= 5000))
+          && (!('location' in data) || (data.location is string && data.location.size() <= 200))
+          && (!('capacity' in data) || data.capacity == null
+              || (data.capacity is int && data.capacity > 0 && data.capacity <= 100000));
+      }
+
+      // draft <-> active, active -> completed. Completed is final: it locks check-in.
+      function isValidTransition(before, after) {
+        return before == after
+          || (before == 'draft' && after == 'active')
+          || (before == 'active' && (after == 'draft' || after == 'completed'));
+      }
+
       // Committee sees only events it is assigned to (per-event scope, SPEC §0.3).
       allow read: if isAdmin()
         || (signedIn() && resource.data.status == 'active')
         || (isOrganizer() && sameOrg(resource.data.organization_id))
         || isAssignedCommittee(eventId);
 
+      // New events always start as drafts.
       allow create: if isOrganizer()
-        && sameOrg(request.resource.data.organization_id);
+        && sameOrg(request.resource.data.organization_id)
+        && isValidEvent(request.resource.data)
+        && request.resource.data.status == 'draft'
+        && request.resource.data.created_by == request.auth.uid;
 
-      allow update, delete: if isOrganizer()
+      allow update: if isOrganizer()
         && sameOrg(resource.data.organization_id)
-        && sameOrg(request.resource.data.organization_id);
+        && isValidEvent(request.resource.data)
+        && request.resource.data.organization_id == resource.data.organization_id
+        && request.resource.data.created_by == resource.data.created_by
+        && isValidTransition(resource.data.status, request.resource.data.status);
+
+      // Only drafts can be deleted: published events may have registrations.
+      allow delete: if isOrganizer()
+        && sameOrg(resource.data.organization_id)
+        && resource.data.status == 'draft';
 
       // ---- events/{eventId}/committees/{uid} ----------------------
       // Organizer assigns committee members to their own org's events.
-      // The Cloud Function enforces that the assignee's orgId matches.
+      // The assignee must be a committee member of the same org. The
+      // users/{uid} profile mirrors the claims (written by applyRole).
       match /committees/{uid} {
+        function eventOrg() {
+          return get(/databases/$(database)/documents/events/$(eventId)).data.organization_id;
+        }
+
+        function assignee() {
+          return get(/databases/$(database)/documents/users/$(uid)).data;
+        }
+
         allow read: if isAdmin()
-          || request.auth.uid == uid
-          || (isOrganizer()
-              && sameOrg(get(/databases/$(database)/documents/events/$(eventId)).data.organization_id));
+          || (signedIn() && request.auth.uid == uid)
+          || (isOrganizer() && sameOrg(eventOrg()));
 
-        allow create, update: if isOrganizer()
-          && sameOrg(get(/databases/$(database)/documents/events/$(eventId)).data.organization_id)
-          && request.resource.data.organization_id == request.auth.token.get('orgId', null);
+        allow create: if isOrganizer()
+          && sameOrg(eventOrg())
+          && request.resource.data.keys().hasOnly(['uid', 'organization_id', 'display_name', 'email', 'assigned_by', 'assigned_at'])
+          && request.resource.data.uid == uid
+          && request.resource.data.organization_id == eventOrg()
+          && request.resource.data.assigned_by == request.auth.uid
+          && assignee().role == 'committee'
+          && assignee().organization_id == eventOrg();
 
-        allow delete: if isOrganizer()
-          && sameOrg(get(/databases/$(database)/documents/events/$(eventId)).data.organization_id);
+        allow update: if false;
+
+        allow delete: if isOrganizer() && sameOrg(eventOrg());
       }
+    }
+
+    // A committee member lists their own assignments across all events
+    // (collection group query on `committees` filtered by uid).
+    match /{path=**}/committees/{assignment} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
     // ---- attendance/{attendanceId} ----------------------------------

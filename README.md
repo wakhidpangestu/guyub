@@ -40,7 +40,9 @@ Created by `npm run seed`. They appear in the emulator's Google account picker. 
 | `committee@guyub.test` | committee | `himatif` | `/committee` |
 | `attendee@guyub.test` | attendee | none | `/attendee` |
 
-Any new account you add in the picker starts as an attendee.
+Any new account you add in the picker starts as an attendee, unless an admin or organizer invited that email first.
+
+The seed also creates demo data for `himatif`: three events (published with registration open, draft, completed) and `committee@guyub.test` assigned to the published one.
 
 ---
 
@@ -166,19 +168,39 @@ Use three terminals, all starting at the repository root.
 
 6. In the Google picker, choose **Add new account** and enter any email. The new account lands on the Attendee dashboard.
 
+### Try the M2 flow
+
+Run `npm run seed` first (or `.\scripts\dev.ps1 -Seed`) to get the demo events.
+
+1. **Admin.** Sign in as `admin@guyub.test`. Open **Organizations** and click **New organization**. Type a name; the ID fills in by itself. Click **Create**.
+2. On the new organization's page, add an organizer by email. Use an email that has never signed in, for example `new-organizer@example.com`. It appears under **Waiting for first sign-in**.
+3. Sign out. Sign in with **Add new account** using that same email. You land straight on the Organizer dashboard: the invite was applied at first sign-in.
+4. **Organizer.** Sign in as `organizer@guyub.test`. Open **Events**. You see the three demo events.
+5. Click **New event**, fill in a title, and click **Create draft**. On the event page, click **Publish**, then **Open registration**.
+6. Under **Committee for this event**, pick **Budi Committee** and click **Assign**.
+7. Open **Committee** from the organizer home. Add a committee member by email, then remove them again.
+8. **Committee.** Sign in as `committee@guyub.test`. **Your events** lists only the events Budi is assigned to. Opening `localhost:8090/organizer/events` shows **No access to this area**.
+
+Rules to notice while testing:
+- New events always start as drafts. Only drafts can be deleted.
+- Registration can only be open while an event is published.
+- **Mark completed** is final. It closes registration and locks check-in.
+- An organizer only sees their own organization. A committee member only sees the events they are assigned to.
+- Nobody is emailed about an invite yet. Tell the person to sign in with that Google account.
+
 ---
 
 ## Tests
 
 | Command | What it checks | Needs |
 |---|---|---|
-| `npm --prefix functions test` | Role validation and claim writes (7 tests) | Node |
-| `cd apps/dashboard; flutter test` | Routing, auth controller, role dashboards (52 tests) | Flutter |
-| `npm run test:rules` | Firestore and Storage security rules (40 tests) | Java |
-| `npm run test:smoke` | M1 end-to-end on the emulators: sign-in, profile creation, `setUserClaims` (6 tests) | Java |
+| `npm --prefix functions test` | Role validation, invite and remove decisions (24 tests) | Node |
+| `cd apps/dashboard; flutter test` | Routing, auth, every M2 page with a fake backend (85 tests) | Flutter |
+| `npm run test:rules` | Firestore and Storage security rules (65 tests) | Java |
+| `npm run test:smoke` | End-to-end on the emulators: sign-in, roles, invites, removal (14 tests) | Java |
 | `npm test` | Functions, rules, and smoke tests together | Java |
 
-`test:rules` and `test:smoke` start their own emulators. Stop `npm run emulators` first, or they fail with a "port taken" error.
+`test:rules` and `test:smoke` start their own emulators from `firebase.test.json` on separate ports (19099, 18080, 15001, 19199). They never touch your dev emulators or their data, so you can run them while `npm run emulators` is up.
 
 ---
 
@@ -219,6 +241,9 @@ Root `package.json`:
 | A role change does not show up | Open the account menu and choose **Refresh access**. Check the user's custom claims in the Emulator UI under Authentication. |
 | Warnings `MetadataLookupWarning` or `node version "22" doesn't match` | Harmless for local development. |
 | `npm run seed` says the Auth emulator is not reachable | Start the emulators first. |
+| **Add organizer** or **Add committee member** spins for several seconds | The first call to a Cloud Function in the emulator starts it cold. Later calls are fast. |
+| App still shows old screens after pulling new code | In the `flutter run` terminal press `R` (hot restart). The emulators reload rules and functions by themselves. |
+| Organizer sees no events after updating | Run `npm run seed` again to add the demo events to existing emulator data. |
 
 ---
 
@@ -247,11 +272,12 @@ Root `package.json`:
 
 ```
 apps/dashboard/     Flutter Web app for all roles
-  env/              Build-time config (emulator.json committed; real configs ignored)
+  env/              Build-time config (emulator.json and e2e.json committed; real configs ignored)
   lib/auth/         Session state, Google Sign-In, role claims
+  lib/data/         Models, the Backend interface, and its Firebase implementation
   lib/routing/      Router and the pure redirect rules
-  lib/features/     One folder per role area
-  test/             Unit and widget tests
+  lib/features/     One folder per role area, plus shared member management
+  test/             Unit and widget tests (fake auth and fake backend in test/support)
 functions/          Cloud Functions (TypeScript, Node 22, region asia-southeast2)
   scripts/          set-role and seed-emulator
 tests/rules/        Security rules tests
@@ -260,6 +286,7 @@ scripts/dev.ps1     Windows dev launcher
 firestore.rules     Firestore security rules
 storage.rules       Storage security rules
 firebase.json       Firebase config, emulator ports, hosting
+firebase.test.json  Same, on separate ports for tests
 docs/               Spec, handoff notes, abstract drafts
 ```
 
@@ -271,8 +298,14 @@ Implemented and verified on the emulators:
 - Live role change. When a role changes server-side, the open app moves to the new dashboard without signing out.
 - Admin-only `setUserClaims`, `onUserCreated` profile creation, `set-role` and `seed` scripts.
 - Firestore and Storage security rules: deny by default, scoped by organization and by event.
+- **M2:** admin creates organizations and adds organizers by email. Organizer creates, edits, publishes, and completes events, opens and closes registration, adds committee members by email, and assigns them per event. Committee members see their assigned events. Invites for people who have not signed in yet apply at their first sign-in.
 
-Not implemented yet (shown as "Planned" cards in the app): events, committee assignment, registration, QR tickets, check-in, certificates, Sheets export, twibbon, landing page. See `docs/SPEC.md` §7.
+Not implemented yet (shown as "Planned" cards in the app): attendee registration, QR tickets, check-in, certificates, Sheets export, twibbon, platform metrics, landing page. See `docs/SPEC.md` §7.
+
+Known limitations:
+- Invites are not emailed. The organizer tells the person to sign in with that Google account.
+- Organizations cannot be disabled yet.
+- Event banners are not uploaded from the app yet.
 
 ## AI assistance disclosure
 

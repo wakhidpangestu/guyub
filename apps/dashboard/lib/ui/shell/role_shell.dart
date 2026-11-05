@@ -4,31 +4,37 @@ import '../../auth/auth_scope.dart';
 import '../../auth/auth_state.dart';
 import '../../auth/user_role.dart';
 
-/// Frame shared by every role's area: app bar with role badge and account menu.
+/// Frame shared by every role's area: app bar with account menu.
+///
+/// The role's home shows the Guyub brand and a role badge. Sub-pages pass a
+/// [title] and get a back button from the router's page stack.
 class RoleShell extends StatelessWidget {
-  const RoleShell({super.key, required this.role, required this.child});
+  const RoleShell({super.key, required this.role, required this.child, this.title});
 
   final UserRole role;
   final Widget child;
+  final String? title;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 16,
-        title: Row(
-          children: [
-            Text('Guyub', style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.w700)),
-            const SizedBox(width: 12),
-            Flexible(
-              child: Chip(
-                label: Text(role.label, overflow: TextOverflow.ellipsis),
-                visualDensity: VisualDensity.compact,
+        titleSpacing: title == null ? 16 : null,
+        title: title != null
+            ? Text(title!, overflow: TextOverflow.ellipsis)
+            : Row(
+                children: [
+                  Text('Guyub', style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Chip(
+                      label: Text(role.label, overflow: TextOverflow.ellipsis),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
         actions: const [_AccountMenu(), SizedBox(width: 8)],
       ),
       body: SafeArea(child: child),

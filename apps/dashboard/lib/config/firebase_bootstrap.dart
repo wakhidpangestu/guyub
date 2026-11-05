@@ -17,7 +17,7 @@ class FirebaseConfigException implements Exception {
 }
 
 /// Initializes Firebase and, in emulator mode, points every SDK at the local
-/// emulators. Ports match `firebase.json`.
+/// emulators. Ports come from [Env] (defaults match `firebase.json`).
 Future<void> initFirebase() async {
   final missing = Env.missingKeys();
   if (missing.isNotEmpty) throw FirebaseConfigException(missing);
@@ -35,9 +35,9 @@ Future<void> initFirebase() async {
 
   if (Env.useEmulators) {
     const host = Env.emulatorHost;
-    await FirebaseAuth.instance.useAuthEmulator(host, 9099);
-    FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
-    FirebaseFunctions.instanceFor(region: Env.functionsRegion).useFunctionsEmulator(host, 5001);
-    await FirebaseStorage.instance.useStorageEmulator(host, 9199);
+    await FirebaseAuth.instance.useAuthEmulator(host, Env.authPort);
+    FirebaseFirestore.instance.useFirestoreEmulator(host, Env.firestorePort);
+    FirebaseFunctions.instanceFor(region: Env.functionsRegion).useFunctionsEmulator(host, Env.functionsPort);
+    await FirebaseStorage.instance.useStorageEmulator(host, Env.storagePort);
   }
 }

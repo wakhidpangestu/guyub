@@ -12,25 +12,25 @@ class AttendeeHomePage extends StatelessWidget {
       role: UserRole.attendee,
       intro: 'Find events, keep your tickets, and collect your certificates.',
       features: [
-        PlannedFeature(
+        Feature(
           icon: Icons.explore_outlined,
           title: 'Browse events',
           description: 'See active events from every organization on Guyub.',
           milestone: 'M3',
         ),
-        PlannedFeature(
+        Feature(
           icon: Icons.confirmation_number_outlined,
           title: 'My tickets',
           description: 'Your QR ticket for each event you registered for.',
           milestone: 'M3',
         ),
-        PlannedFeature(
+        Feature(
           icon: Icons.workspace_premium_outlined,
           title: 'Certificates',
           description: 'Certificates arrive here and by email after check-in.',
           milestone: 'M5',
         ),
-        PlannedFeature(
+        Feature(
           icon: Icons.photo_filter_outlined,
           title: 'Twibbon',
           description: 'Frame your photo with the event overlay, right in your browser.',

@@ -7,9 +7,14 @@ import 'auth_state.dart';
 
 /// Holds the current session for the UI and the router.
 ///
-/// Also watches for server-side role changes. When an admin or organizer
-/// changes this user's role, the controller refreshes the ID token so the
-/// new dashboard opens without signing out.
+/// Also watches the user's profile document. Cloud Functions mirror the role
+/// there after changing claims. When the profile's role differs from the
+/// ID token's claims, the token is stale, so the controller refreshes it and
+/// the new dashboard opens without signing out.
+///
+/// Comparing values (instead of reacting to "a change happened") also covers
+/// a role applied before the app subscribed, such as an invite picked up at
+/// first sign-in.
 class AuthController extends ChangeNotifier {
   AuthController(this._repository) {
     _stateSub = _repository.watch().listen(_onState, onError: _onStreamError);
@@ -17,8 +22,9 @@ class AuthController extends ChangeNotifier {
 
   final AuthRepository _repository;
   StreamSubscription<AuthState>? _stateSub;
-  StreamSubscription<void>? _roleSub;
+  StreamSubscription<ProfileRole>? _roleSub;
   String? _watchedUid;
+  ProfileRole? _refreshedFor;
   bool _disposed = false;
 
   AuthState _state = const AuthLoading();
@@ -39,17 +45,26 @@ class AuthController extends ChangeNotifier {
     final uid = next is SignedIn ? next.uid : null;
     if (uid != _watchedUid) {
       _roleSub?.cancel();
+      _refreshedFor = null;
       _roleSub = uid == null
           ? null
           // A failed listener must not break the session; claims still
           // refresh on the hourly token rotation.
-          : _repository.roleChanged(uid).listen(
-              (_) => unawaited(_repository.refreshClaims().catchError((Object _) {})),
-              onError: (Object _) {},
-            );
+          : _repository.watchProfileRole(uid).listen(_onProfile, onError: (Object _) {});
       _watchedUid = uid;
     }
     _notify();
+  }
+
+  void _onProfile(ProfileRole profile) {
+    final session = _state;
+    if (session is! SignedIn) return;
+    if (profile == ProfileRole(session.role, session.orgId)) return;
+    // Refresh once per target value. If claims and profile stay apart (for
+    // example a failed write), this avoids a refresh loop.
+    if (profile == _refreshedFor) return;
+    _refreshedFor = profile;
+    unawaited(_repository.refreshClaims().catchError((Object _) {}));
   }
 
   void _onStreamError(Object error) {
