@@ -84,6 +84,10 @@ export async function seed(env) {
       "events/evtA": event("himatif", { status: "active", registration_open: true }),
       "events/evtDraft": event("himatif", { title: "Draft" }),
       "events/evtDone": event("himatif", { title: "Done", status: "completed" }),
+      "events/evtFull": event("himatif", { title: "Full", status: "active", capacity: 1, registered_count: 1 }),
+      // Was published, got a registration, then moved back to draft.
+      "events/evtUnpublished": event("himatif", { title: "Unpublished", registered_count: 1 }),
+      "attendance/evtUnpublished_att1": attendance("evtUnpublished", "att1", "himatif", now),
       "events/evtB": event("bem", { title: "BEM Summit", status: "active", registration_open: true, created_by: "org2" }),
       "events/evtA/committees/comA": assignment("comA", "himatif"),
       "invites/pending@example.com": { email: "pending@example.com", role: "committee", organization_id: "himatif" },

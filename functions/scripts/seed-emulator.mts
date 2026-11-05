@@ -10,6 +10,7 @@ import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import claims from "../lib/claims.js";
+import tickets from "../lib/tickets.js";
 
 const AUTH_HOST = (process.env.FIREBASE_AUTH_EMULATOR_HOST ??= "localhost:9099");
 process.env.FIRESTORE_EMULATOR_HOST ??= "localhost:8080";
@@ -116,6 +117,7 @@ for (const { id, ...data } of events) {
     ...data,
     organization_id: ORG_ID,
     created_by: uids.organizer,
+    registered_count: id === "demo-tech-talk" ? 1 : 0,
     created_at: FieldValue.serverTimestamp(),
     updated_at: FieldValue.serverTimestamp(),
   });
@@ -128,6 +130,20 @@ await db.collection("events").doc("demo-tech-talk").collection("committees").doc
   assigned_by: uids.organizer,
   assigned_at: FieldValue.serverTimestamp(),
 });
-console.log(`${events.length} demo events; committee@guyub.test assigned to "Tech Talk"`);
+// attendee@guyub.test already holds a ticket for the Tech Talk.
+await db.collection("attendance").doc(`demo-tech-talk_${uids.attendee}`).set({
+  event_id: "demo-tech-talk",
+  user_id: uids.attendee,
+  organization_id: ORG_ID,
+  attendee_name: "Sari Attendee",
+  attendee_email: "attendee@guyub.test",
+  qr_token: tickets.newQrToken(),
+  is_checked_in: false,
+  certificate_issued: false,
+  privacy_consent: true,
+  consent_at: FieldValue.serverTimestamp(),
+  registered_at: FieldValue.serverTimestamp(),
+});
+console.log(`${events.length} demo events; committee@guyub.test assigned to "Tech Talk"; attendee@guyub.test registered for it`);
 
 console.log("\nDone. In the app, click Continue with Google and pick one of these accounts.");

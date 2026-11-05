@@ -42,7 +42,7 @@ Created by `npm run seed`. They appear in the emulator's Google account picker. 
 
 Any new account you add in the picker starts as an attendee, unless an admin or organizer invited that email first.
 
-The seed also creates demo data for `himatif`: three events (published with registration open, draft, completed) and `committee@guyub.test` assigned to the published one.
+The seed also creates demo data for `himatif`: three events (published with registration open, draft, completed), `committee@guyub.test` assigned to the published one, and `attendee@guyub.test` holding a ticket for it.
 
 ---
 
@@ -188,16 +188,33 @@ Rules to notice while testing:
 - An organizer only sees their own organization. A committee member only sees the events they are assigned to.
 - Nobody is emailed about an invite yet. Tell the person to sign in with that Google account.
 
+### Try the M3 flow
+
+1. **Organizer.** Sign in as `organizer@guyub.test`. Open **Flutter Web Workshop** (a draft), click **Publish**, then **Open registration**. Optionally set a small capacity with **Edit details**, for example `1`.
+2. **Attendee.** Sign in as `attendee@guyub.test` and open **Browse events**. You see both published events, the organization name, and the state: **Registered** for the Tech Talk, spots left for the workshop.
+3. Open the workshop and click **Register**. Read the privacy notice. The **Register** button stays disabled until you tick the checkbox.
+4. After registering you land on the ticket. The QR code changes every 30 seconds; the bar shows when.
+5. Open **My tickets** from the attendee home. Both tickets are listed.
+6. Back on the workshop page, click **Cancel registration**. The spot is freed and **Register** appears again.
+7. With capacity `1`, register with one account, then try with a second new account: the event shows **Full** and offers no Register button.
+
+Rules to notice while testing:
+- Registration needs the privacy consent. The server refuses it otherwise.
+- Capacity is enforced on the server in a transaction, so two people cannot take the last spot at the same time.
+- Registering twice is harmless: you get the same ticket.
+- Only attendee accounts can register. Organizer and committee accounts cannot.
+- A screenshot of the QR stops working after about a minute. Check-in itself comes in M4.
+
 ---
 
 ## Tests
 
 | Command | What it checks | Needs |
 |---|---|---|
-| `npm --prefix functions test` | Role validation, invite and remove decisions (24 tests) | Node |
-| `cd apps/dashboard; flutter test` | Routing, auth, every M2 page with a fake backend (85 tests) | Flutter |
-| `npm run test:rules` | Firestore and Storage security rules (65 tests) | Java |
-| `npm run test:smoke` | End-to-end on the emulators: sign-in, roles, invites, removal (14 tests) | Java |
+| `npm --prefix functions test` | Roles, invites, registration decisions, QR signing and verification (39 tests) | Node |
+| `cd apps/dashboard; flutter test` | Routing, auth, every page with a fake backend, QR rotation (101 tests) | Flutter |
+| `npm run test:rules` | Firestore and Storage security rules (64 tests) | Java |
+| `npm run test:smoke` | End-to-end on the emulators: sign-in, roles, invites, registration, capacity (22 tests) | Java |
 | `npm test` | Functions, rules, and smoke tests together | Java |
 
 `test:rules` and `test:smoke` start their own emulators from `firebase.test.json` on separate ports (19099, 18080, 15001, 19199). They never touch your dev emulators or their data, so you can run them while `npm run emulators` is up.
@@ -300,9 +317,12 @@ Implemented and verified on the emulators:
 - Firestore and Storage security rules: deny by default, scoped by organization and by event.
 - **M2:** admin creates organizations and adds organizers by email. Organizer creates, edits, publishes, and completes events, opens and closes registration, adds committee members by email, and assigns them per event. Committee members see their assigned events. Invites for people who have not signed in yet apply at their first sign-in.
 
-Not implemented yet (shown as "Planned" cards in the app): attendee registration, QR tickets, check-in, certificates, Sheets export, twibbon, platform metrics, landing page. See `docs/SPEC.md` §7.
+- **M3:** attendees browse upcoming events from every organization, register after accepting a privacy notice, cancel before check-in, and keep their tickets. Capacity is enforced on the server. Tickets show a QR code that changes every 30 seconds, so screenshots expire.
+
+Not implemented yet (shown as "Planned" cards in the app): check-in scanner, certificates, Sheets export, twibbon, platform metrics, landing page. See `docs/SPEC.md` §7.
 
 Known limitations:
+- Only attendee accounts can register. An organizer or committee member cannot attend another organization's event with the same account.
 - Invites are not emailed. The organizer tells the person to sign in with that Google account.
 - Organizations cannot be disabled yet.
 - Event banners are not uploaded from the app yet.

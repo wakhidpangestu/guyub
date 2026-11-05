@@ -5,7 +5,11 @@ import '../auth/user_role.dart';
 import '../features/admin/admin_home_page.dart';
 import '../features/admin/organization_detail_page.dart';
 import '../features/admin/organizations_page.dart';
+import '../features/attendee/attendee_event_page.dart';
 import '../features/attendee/attendee_home_page.dart';
+import '../features/attendee/browse_events_page.dart';
+import '../features/attendee/ticket_page.dart';
+import '../features/attendee/tickets_page.dart';
 import '../features/committee/committee_home_page.dart';
 import '../features/organizer/committee_page.dart';
 import '../features/organizer/event_detail_page.dart';
@@ -77,7 +81,32 @@ GoRouter createRouter(AuthController auth, {String? initialLocation}) {
         ],
       ),
       GoRoute(path: UserRole.committee.homePath, builder: (context, state) => const CommitteeHomePage()),
-      GoRoute(path: UserRole.attendee.homePath, builder: (context, state) => const AttendeeHomePage()),
+      GoRoute(
+        path: UserRole.attendee.homePath,
+        builder: (context, state) => const AttendeeHomePage(),
+        routes: [
+          GoRoute(
+            path: 'events',
+            builder: (context, state) => const BrowseEventsPage(),
+            routes: [
+              GoRoute(
+                path: ':eventId',
+                builder: (context, state) => AttendeeEventPage(eventId: state.pathParameters['eventId']!),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: 'tickets',
+            builder: (context, state) => const TicketsPage(),
+            routes: [
+              GoRoute(
+                path: ':eventId',
+                builder: (context, state) => TicketPage(eventId: state.pathParameters['eventId']!),
+              ),
+            ],
+          ),
+        ],
+      ),
     ],
   );
 }

@@ -67,9 +67,10 @@ describe("users", () => {
 describe("organizations", () => {
   const org = (overrides = {}) => ({ name: "New Org", slug: "new-org", status: "active", created_by: "admin1", ...overrides });
 
-  it("organizer reads own org only", async () => {
-    await assertSucceeds(getDoc(doc(db(as.organizer), "organizations/himatif")));
-    await assertFails(getDoc(doc(db(as.organizer), "organizations/bem")));
+  it("any signed-in user reads organization names (shown on event cards)", async () => {
+    await assertSucceeds(getDoc(doc(db(as.attendee), "organizations/bem")));
+    await assertSucceeds(getDocs(collection(db(as.attendee), "organizations")));
+    await assertFails(getDoc(doc(db(as.anonymous), "organizations/bem")));
   });
 
   it("only admin creates organizations", async () => {
@@ -265,41 +266,46 @@ describe("committee assignment", () => {
 });
 
 describe("attendance: registration", () => {
+  // Registration goes through the registerForEvent Cloud Function, which
+  // checks consent and capacity and issues the QR token (see tests/smoke/m3).
   const register = (persona, id, data) => setDoc(doc(db(persona), `attendance/${id}`), data);
 
-  it("attendee registers for an active, open event with consent", async () => {
-    await assertSucceeds(register(as.otherAttendee, "evtA_att2", attendance("evtA", "att2", "himatif")));
-  });
-
-  it("rejects registration without privacy consent", async () => {
-    const data = { ...attendance("evtA", "att2", "himatif"), privacy_consent: false };
-    await assertFails(register(as.otherAttendee, "evtA_att2", data));
-  });
-
-  it("rejects a document ID that is not eventId_uid", async () => {
-    await assertFails(register(as.otherAttendee, "evtA_someoneElse", attendance("evtA", "att2", "himatif")));
-  });
-
-  it("rejects registering someone else", async () => {
-    await assertFails(register(as.otherAttendee, "evtA_att3", attendance("evtA", "att3", "himatif")));
-  });
-
-  it("rejects registration for a draft event", async () => {
-    await assertFails(register(as.otherAttendee, "evtDraft_att2", attendance("evtDraft", "att2", "himatif")));
-  });
-
-  it("rejects a pre-checked-in or pre-certified registration", async () => {
-    await assertFails(register(as.otherAttendee, "evtA_att2", { ...attendance("evtA", "att2", "himatif"), is_checked_in: true }));
-    await assertFails(register(as.otherAttendee, "evtA_att2", { ...attendance("evtA", "att2", "himatif"), certificate_issued: true }));
-  });
-
-  it("rejects a mismatched organization_id", async () => {
-    await assertFails(register(as.otherAttendee, "evtA_att2", attendance("evtA", "att2", "bem")));
-  });
-
-  it("organizers and committee cannot register as attendees", async () => {
+  it("nobody creates attendance from the client, even a valid-looking one", async () => {
+    await assertFails(register(as.otherAttendee, "evtA_att2", attendance("evtA", "att2", "himatif")));
+    await assertFails(register(as.admin, "evtA_admin1", attendance("evtA", "admin1", "himatif")));
     await assertFails(register(as.organizer, "evtA_org1", attendance("evtA", "org1", "himatif")));
-    await assertFails(register(as.committee, "evtA_comA", attendance("evtA", "comA", "himatif")));
+  });
+
+  it("an attendee cannot change their own ticket", async () => {
+    await assertFails(updateDoc(doc(db(as.attendee), "attendance/evtA_att1"), { qr_token: "forged" }));
+    await assertFails(updateDoc(doc(db(as.attendee), "attendance/evtA_att1"), { is_checked_in: true }));
+  });
+});
+
+describe("events: registration counter", () => {
+  it("organizer cannot change registered_count", async () => {
+    await assertFails(updateDoc(doc(db(as.organizer), "events/evtFull"), { registered_count: 0 }));
+    await assertSucceeds(updateDoc(doc(db(as.organizer), "events/evtFull"), { title: "Still full" }));
+  });
+
+  it("a new event cannot start with registrations", async () => {
+    await assertFails(setDoc(doc(db(as.organizer), "events/evtNew"), event("himatif", { registered_count: 5 })));
+    await assertSucceeds(setDoc(doc(db(as.organizer), "events/evtNew"), event("himatif", { registered_count: 0 })));
+  });
+
+  it("a draft that still has registrations cannot be deleted", async () => {
+    await assertFails(deleteDoc(doc(db(as.organizer), "events/evtUnpublished")));
+  });
+
+  it("a registered attendee still reads the event after it leaves active", async () => {
+    await assertSucceeds(getDoc(doc(db(as.attendee), "events/evtUnpublished")));
+    await assertFails(getDoc(doc(db(as.otherAttendee), "events/evtUnpublished")));
+  });
+
+  it("attendees browse published events with a status query", async () => {
+    const published = query(collection(db(as.otherAttendee), "events"), where("status", "==", "active"));
+    await assertSucceeds(getDocs(published));
+    await assertFails(getDocs(collection(db(as.otherAttendee), "events")));
   });
 });
 

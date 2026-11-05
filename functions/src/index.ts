@@ -16,6 +16,8 @@ import {
   PermissionError,
   type Actor,
 } from "./members";
+import { attendanceIdFor, decideCancellation, decideRegistration, parseRegistrationRequest } from "./registration";
+import { newQrToken } from "./tickets";
 
 initializeApp();
 
@@ -187,7 +189,88 @@ export const onUserCreated = functionsV1
     }
   });
 
+/**
+ * Registers the caller for an event and issues their QR ticket.
+ *
+ * Runs in a transaction so capacity holds under concurrent registrations:
+ * the event's `registered_count` and the attendance document change together.
+ * Idempotent: registering twice returns the existing ticket.
+ */
+export const registerForEvent = onCall(async (request) => {
+  const caller = callerOf(request);
+  try {
+    const { eventId } = parseRegistrationRequest(request.data);
+    const uid = request.auth!.uid;
+    const db = getFirestore();
+    const user = await getAuth().getUser(uid);
+    const eventRef = db.collection("events").doc(eventId);
+    const attendanceRef = db.collection("attendance").doc(attendanceIdFor(eventId, uid));
+
+    const status = await db.runTransaction(async (tx) => {
+      const [event, attendance] = await Promise.all([tx.get(eventRef), tx.get(attendanceRef)]);
+      const state = event.exists
+        ? {
+            status: event.get("status") as string,
+            registrationOpen: event.get("registration_open") === true,
+            capacity: (event.get("capacity") as number | null | undefined) ?? null,
+            registeredCount: (event.get("registered_count") as number | undefined) ?? 0,
+          }
+        : null;
+
+      if (decideRegistration(caller, state, attendance.exists) === "existing") return "existing";
+
+      tx.create(attendanceRef, {
+        event_id: eventId,
+        user_id: uid,
+        organization_id: event.get("organization_id"),
+        attendee_name: user.displayName ?? null,
+        attendee_email: user.email ?? null,
+        qr_token: newQrToken(),
+        is_checked_in: false,
+        certificate_issued: false,
+        privacy_consent: true,
+        consent_at: FieldValue.serverTimestamp(),
+        registered_at: FieldValue.serverTimestamp(),
+      });
+      tx.update(eventRef, { registered_count: FieldValue.increment(1) });
+      return "registered";
+    });
+
+    return { status, attendanceId: attendanceRef.id };
+  } catch (error) {
+    toHttpsError(error);
+  }
+});
+
+/**
+ * Cancels the caller's registration before check-in and frees the spot.
+ */
+export const cancelRegistration = onCall(async (request) => {
+  callerOf(request);
+  try {
+    const eventId = (request.data as { eventId?: unknown } | null)?.eventId;
+    if (typeof eventId !== "string" || eventId.length === 0) throw new RoleInputError("eventId is required.");
+    const db = getFirestore();
+    const eventRef = db.collection("events").doc(eventId);
+    const attendanceRef = db.collection("attendance").doc(attendanceIdFor(eventId, request.auth!.uid));
+
+    await db.runTransaction(async (tx) => {
+      const [event, attendance] = await Promise.all([tx.get(eventRef), tx.get(attendanceRef)]);
+      decideCancellation(
+        attendance.exists ? { isCheckedIn: attendance.get("is_checked_in") === true } : null,
+        event.exists ? (event.get("status") as string) : null,
+      );
+      tx.delete(attendanceRef);
+      if (event.exists) tx.update(eventRef, { registered_count: FieldValue.increment(-1) });
+    });
+    return { ok: true };
+  } catch (error) {
+    toHttpsError(error);
+  }
+});
+
 // Next milestones:
+//   - onCall "checkIn" (M4): parse and verify the dynamic QR with
+//     tickets.verifyTicket, then mark the attendance checked in.
 //   - onDocumentUpdated("attendance/{id}"): when is_checked_in flips to true,
 //     generate the personalized PDF certificate and email it (M5).
-//   - onCall "issueQrHash": create qr_hash for each attendance record (M3).

@@ -72,6 +72,17 @@ export async function putDoc(path, data) {
   assert.equal(status, 200, JSON.stringify(body));
 }
 
+/** Updates only the given fields, bypassing security rules (seeding only). */
+export async function patchDoc(path, data) {
+  const mask = Object.keys(data).map((key) => `updateMask.fieldPaths=${encodeURIComponent(key)}`).join("&");
+  const { status, body } = await json(`${docUrl(path)}?${mask}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json", authorization: "Bearer owner" },
+    body: JSON.stringify(toFields(data)),
+  });
+  assert.equal(status, 200, JSON.stringify(body));
+}
+
 export async function getDoc(path) {
   const { status, body } = await json(docUrl(path), { headers: { authorization: "Bearer owner" } });
   return status === 200 ? body.fields : null;

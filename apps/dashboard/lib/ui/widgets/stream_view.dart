@@ -15,11 +15,15 @@ class StreamView<T> extends StatefulWidget {
     this.streamKey,
     this.isEmpty,
     this.empty,
+    this.errorText,
   });
 
   final Stream<T> Function() create;
   final Widget Function(BuildContext context, T data) builder;
   final Object? streamKey;
+
+  /// Replaces the generic error message, when a page knows the likely cause.
+  final String? errorText;
 
   /// When it returns true, [empty] is shown instead of [builder].
   final bool Function(T data)? isEmpty;
@@ -43,7 +47,7 @@ class _StreamViewState<T> extends State<StreamView<T>> {
     return StreamBuilder<T>(
       stream: _stream,
       builder: (context, snapshot) {
-        if (snapshot.hasError) return ErrorNote(describeError(snapshot.error!));
+        if (snapshot.hasError) return ErrorNote(widget.errorText ?? describeError(snapshot.error!));
         // Waiting means no value yet. Do not use hasData: null is a valid
         // value (for example "this event does not exist").
         if (snapshot.connectionState == ConnectionState.waiting) {

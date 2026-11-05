@@ -15,14 +15,14 @@ class AttendeeHomePage extends StatelessWidget {
         Feature(
           icon: Icons.explore_outlined,
           title: 'Browse events',
-          description: 'See active events from every organization on Guyub.',
-          milestone: 'M3',
+          description: 'Upcoming events from every organization on Guyub.',
+          route: '/attendee/events',
         ),
         Feature(
           icon: Icons.confirmation_number_outlined,
           title: 'My tickets',
           description: 'Your QR ticket for each event you registered for.',
-          milestone: 'M3',
+          route: '/attendee/tickets',
         ),
         Feature(
           icon: Icons.workspace_premium_outlined,

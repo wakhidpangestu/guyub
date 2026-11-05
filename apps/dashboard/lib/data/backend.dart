@@ -65,4 +65,20 @@ abstract interface class Backend {
 
   /// Events the committee member [uid] is assigned to, by date.
   Stream<List<GuyubEvent>> watchAssignedEvents(String uid);
+
+  // ---- Attendee (M3) --------------------------------------------------
+  /// Published events from every organization, from today on, by date.
+  Stream<List<GuyubEvent>> watchUpcomingEvents();
+
+  /// The attendee's registration for one event, or null.
+  Stream<Registration?> watchRegistration(String eventId, String uid);
+
+  /// The attendee's tickets with their events, by event date.
+  Stream<List<Ticket>> watchTickets(String uid);
+
+  /// Registers the signed-in attendee. The caller must have shown the
+  /// privacy notice and received consent.
+  Future<RegistrationOutcome> register(String eventId);
+
+  Future<void> cancelRegistration(String eventId);
 }

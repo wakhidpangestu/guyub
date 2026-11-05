@@ -18,6 +18,16 @@ class FakeBackend implements Backend {
   /// eventId -> uid -> assignment.
   final assignments = <String, Map<String, Assignment>>{};
 
+  /// attendanceId (`eventId_uid`) -> registration.
+  final registrations = <String, Registration>{};
+
+  /// The signed-in user for [register]. Must match the Harness uid and role.
+  String currentUid = 'u1';
+  UserRole currentRole = UserRole.attendee;
+
+  /// "Today" for [watchUpcomingEvents].
+  DateTime today = DateTime(2026, 11, 5);
+
   /// When set, the next write throws it.
   BackendFailure? failNext;
 
@@ -45,17 +55,39 @@ class FakeBackend implements Backend {
     people[uid] = Member(uid: uid, role: role, orgId: orgId, email: email ?? '$uid@example.com', displayName: name);
   }
 
-  GuyubEvent addEvent(String id, String orgId, {String title = 'Event', EventStatus status = EventStatus.draft, DateTime? date}) {
+  GuyubEvent addEvent(
+    String id,
+    String orgId, {
+    String title = 'Event',
+    EventStatus status = EventStatus.draft,
+    DateTime? date,
+    bool registrationOpen = false,
+    int? capacity,
+    int registeredCount = 0,
+  }) {
     final event = GuyubEvent(
       id: id,
       orgId: orgId,
       title: title,
       date: date ?? DateTime(2026, 12, 1, 9),
       status: status,
-      registrationOpen: false,
+      registrationOpen: registrationOpen,
+      capacity: capacity,
+      registeredCount: registeredCount,
     );
     events[id] = event;
     return event;
+  }
+
+  Registration addRegistration(String eventId, {String? uid, bool checkedIn = false}) {
+    final registration = Registration(
+      eventId: eventId,
+      userId: uid ?? currentUid,
+      qrToken: 'token-$eventId',
+      isCheckedIn: checkedIn,
+    );
+    registrations[registration.attendanceId] = registration;
+    return registration;
   }
 
   // ---- Organizations -------------------------------------------------------
@@ -162,7 +194,10 @@ class FakeBackend implements Backend {
   @override
   Future<void> deleteEvent(String eventId) async {
     _maybeFail();
-    if (events[eventId]?.status != EventStatus.draft) throw const BackendFailure('You do not have permission to do that.');
+    final event = events[eventId];
+    if (event?.status != EventStatus.draft || event!.registeredCount > 0) {
+      throw const BackendFailure('You do not have permission to do that.');
+    }
     events.remove(eventId);
     assignments.remove(eventId);
     _changed();
@@ -194,4 +229,56 @@ class FakeBackend implements Backend {
         for (final entry in assignments.entries)
           if (entry.value.containsKey(uid) && events.containsKey(entry.key)) events[entry.key]!,
       ]..sort((a, b) => a.date.compareTo(b.date)));
+
+  // ---- Attendee ------------------------------------------------------------
+
+  @override
+  Stream<List<GuyubEvent>> watchUpcomingEvents() => _watch(() {
+        final start = DateTime(today.year, today.month, today.day);
+        return events.values.where((e) => e.status == EventStatus.active && !e.date.isBefore(start)).toList()
+          ..sort((a, b) => a.date.compareTo(b.date));
+      });
+
+  @override
+  Stream<Registration?> watchRegistration(String eventId, String uid) => _watch(() => registrations['${eventId}_$uid']);
+
+  @override
+  Stream<List<Ticket>> watchTickets(String uid) => _watch(() => [
+        for (final registration in registrations.values)
+          if (registration.userId == uid && events.containsKey(registration.eventId))
+            Ticket(registration, events[registration.eventId]!),
+      ]..sort((a, b) => a.event.date.compareTo(b.event.date)));
+
+  /// Same decisions as decideRegistration in functions/src/registration.ts.
+  @override
+  Future<RegistrationOutcome> register(String eventId) async {
+    _maybeFail();
+    if (currentRole != UserRole.attendee) throw const BackendFailure('Only attendee accounts can register for events.');
+    final id = '${eventId}_$currentUid';
+    if (registrations.containsKey(id)) return RegistrationOutcome.existing;
+    final event = events[eventId];
+    if (event == null || event.status != EventStatus.active || !event.registrationOpen) {
+      throw const BackendFailure('Registration for this event is closed.');
+    }
+    if (event.isFull) throw const BackendFailure('This event is full.');
+    addRegistration(eventId);
+    events[eventId] = event.withRegisteredCount(event.registeredCount + 1);
+    _changed();
+    return RegistrationOutcome.registered;
+  }
+
+  @override
+  Future<void> cancelRegistration(String eventId) async {
+    _maybeFail();
+    final id = '${eventId}_$currentUid';
+    final registration = registrations[id];
+    if (registration == null) throw const BackendFailure('You are not registered for this event.');
+    if (registration.isCheckedIn) {
+      throw const BackendFailure('You have already checked in, so the registration cannot be cancelled.');
+    }
+    registrations.remove(id);
+    final event = events[eventId];
+    if (event != null) events[eventId] = event.withRegisteredCount(event.registeredCount - 1);
+    _changed();
+  }
 }

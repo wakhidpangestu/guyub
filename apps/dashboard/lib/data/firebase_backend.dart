@@ -213,7 +213,79 @@ class FirebaseBackend implements Backend {
       })
       .mapErrors();
 
+  // ---- Attendee -----------------------------------------------------------
+
+  CollectionReference<Map<String, dynamic>> get _attendance => _db.collection('attendance');
+
+  /// Needs the (status, date) composite index in firestore.indexes.json.
+  @override
+  Stream<List<GuyubEvent>> watchUpcomingEvents() {
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    return _events
+        .where('status', isEqualTo: EventStatus.active.name)
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfToday))
+        .orderBy('date')
+        .snapshots()
+        .map((s) => s.docs.map(_event).toList())
+        .mapErrors();
+  }
+
+  /// A query, not a document read: reading a ticket that does not exist is
+  /// denied by the rules (there is no owner to compare against), while a
+  /// query filtered on the caller's uid is allowed and returns nothing.
+  @override
+  Stream<Registration?> watchRegistration(String eventId, String uid) => _attendance
+      .where('user_id', isEqualTo: uid)
+      .where('event_id', isEqualTo: eventId)
+      .limit(1)
+      .snapshots()
+      .map((s) => s.docs.isEmpty ? null : _registration(s.docs.first))
+      .mapErrors();
+
+  @override
+  Stream<List<Ticket>> watchTickets(String uid) => _attendance
+      .where('user_id', isEqualTo: uid)
+      .snapshots()
+      .asyncMap((snapshot) async {
+        final tickets = await Future.wait(snapshot.docs.map((doc) async {
+          final registration = _registration(doc);
+          try {
+            final event = await _events.doc(registration.eventId).get();
+            return event.exists ? Ticket(registration, _event(event)) : null;
+          } on FirebaseException {
+            return null;
+          }
+        }));
+        return tickets.whereType<Ticket>().toList()..sort((a, b) => a.event.date.compareTo(b.event.date));
+      })
+      .mapErrors();
+
+  @override
+  Future<RegistrationOutcome> register(String eventId) => _guard(() async {
+        final result = await _functions
+            .httpsCallable('registerForEvent')
+            .call<Map<String, dynamic>>({'eventId': eventId, 'privacyConsent': true});
+        return result.data['status'] == 'existing' ? RegistrationOutcome.existing : RegistrationOutcome.registered;
+      });
+
+  @override
+  Future<void> cancelRegistration(String eventId) =>
+      _guard(() => _functions.httpsCallable('cancelRegistration').call<Map<String, dynamic>>({'eventId': eventId}));
+
   // ---- Mapping ------------------------------------------------------------
+
+  static Registration _registration(_Doc d) {
+    final data = d.data()!;
+    final registeredAt = data['registered_at'];
+    return Registration(
+      eventId: data['event_id'] as String,
+      userId: data['user_id'] as String,
+      qrToken: data['qr_token'] as String? ?? '',
+      isCheckedIn: data['is_checked_in'] == true,
+      registeredAt: registeredAt is Timestamp ? registeredAt.toDate() : null,
+    );
+  }
 
   static Organization _organization(_Doc d) {
     final data = d.data()!;
@@ -244,6 +316,7 @@ class FirebaseBackend implements Backend {
       capacity: (data['capacity'] as num?)?.toInt(),
       status: EventStatus.parse(data['status']),
       registrationOpen: data['registration_open'] == true,
+      registeredCount: (data['registered_count'] as num?)?.toInt() ?? 0,
     );
   }
 

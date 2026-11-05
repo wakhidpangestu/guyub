@@ -71,6 +71,7 @@ events/{eventId}
   certificate_template_url
   registration_open: boolean           NEW
   capacity: number | null              NEW
+  registered_count: number             NEW (M3) written only by Cloud Functions
   created_by, created_at, updated_at
 
 events/{eventId}/committees/{uid}      NEW  (committee assignment)
@@ -79,7 +80,8 @@ events/{eventId}/committees/{uid}      NEW  (committee assignment)
 
 attendance/{attendanceId}              (ID = `${eventId}_${uid}`)  CHANGED: deterministic ID
   event_id, user_id, organization_id   NEW
-  qr_hash                              see §5
+  qr_token                             CHANGED (M3): random secret per ticket, see §5
+  attendee_name, attendee_email        NEW (M3) for the committee and certificates
   is_checked_in, checked_in_at, checked_in_by   NEW
   certificate_issued, certificate_url  NEW
   registered_at                        NEW
@@ -108,14 +110,18 @@ Not built: invite emails. The inviter tells the person to sign in.
 **Event lifecycle**
 `draft` → `active` (published, visible to attendees) → `completed` (after event date; locks check-in).
 
-**Attendee registration**
-1. Attendee signs in (see §8).
-2. Ticks the privacy notice toggle and registers for an active event with `registration_open = true`. Writes `attendance/{eventId}_{uid}` with `privacy_consent: true` and `consent_at`. Rules reject the write without consent.
-3. Sees dynamic QR ticket.
+**Attendee registration (M3)**
+1. Attendee signs in with Google and browses published events from today on (all orgs).
+2. On an event, the attendee clicks Register. A privacy notice (what is shared with whom, 12-month retention, cancellation) must be accepted with a checkbox.
+3. The app calls `registerForEvent({eventId, privacyConsent: true})`. In one transaction the function checks consent, attendee role, status, open registration, and capacity; creates `attendance/{eventId}_{uid}` with a random `qr_token`; and increments `registered_count`. Registering twice returns the existing ticket.
+4. The ticket page shows the rotating QR (§5).
+5. `cancelRegistration` deletes the ticket and frees the spot, until check-in and while the event is not completed.
+
+Clients cannot create attendance at all (rules: `allow create: if false`). Only attendee accounts register. An organizer or committee member cannot attend another org's event with the same account (known limitation).
 
 **Check-in (committee)**
-1. Committee scans QR. App reads `qr_hash` and event assignment.
-2. Committee sets `is_checked_in = true`, `checked_in_at`, `checked_in_by`. Rules allow only these fields.
+1. Committee scans QR. The app sends the payload to a `checkIn` callable (M4), which runs `verifyTicket` against the stored `qr_token` and the committee member's assignment.
+2. The function sets `is_checked_in = true`, `checked_in_at`, `checked_in_by`. M4 removes the current client-side update rule, so check-in cannot skip the QR check.
 3. Cloud Function `onAttendanceCheckedIn` (phase 1 milestone) issues certificate and emails it.
 
 **Certificate**
@@ -123,9 +129,13 @@ Generated from `certificate_template_url` with the attendee's name. Stored at `c
 
 ## 5. QR design
 
-- QR payload is `{eventId, uid, qr_hash}`. Nothing else.
-- `qr_hash` = HMAC-SHA256 of `eventId|uid|issuedAt` with a server secret. Stored on the attendance doc.
-- Plain `qr_hash` alone is replayable, so the scanner must verify through a callable function, not trust the client.
+Dynamic QR, built in M3 (`functions/src/tickets.ts`, `apps/dashboard/lib/data/ticket_code.dart`):
+
+- Each registration has a random 128-bit `qr_token`, created by `registerForEvent`. Only the attendee, their org's organizers, and the event's committee can read it.
+- The QR shows `G1.{attendanceId}.{window}.{signature}`, where `window = floor(unix seconds / 30)` and `signature` = first 16 hex chars of HMAC-SHA256(key = `qr_token`, message = `{attendanceId}.{window}`).
+- The code changes every 30 seconds. Check-in accepts windows within ±2 of the server clock, so a screenshot stops working after about a minute.
+- Dart and Node implementations are tested against the same vector (cross-checked with `openssl`). A QR decoded from the release web build was verified by the server code: valid at the time, expired two minutes later, invalid with another token.
+- No server secret is needed: the per-ticket token is the key, and it is only readable by the people listed above.
 - Check-in is online only (locked, §0 decision 5).
 
 ## 6. Security checklist
@@ -141,7 +151,7 @@ Generated from `certificate_template_url` with the attendee's name. Stored at `c
 
 M0–M4 is the 1-week core MVP sprint. M5–M6, polish, and the demo video run until 16 Dec (§0 decision 7).
 
-Status: M0, M1, and M2 done and verified end-to-end on the emulators (`npm run test:smoke`, plus browser runs of every M2 write path). Next: M3.
+Status: M0 to M3 done and verified end-to-end on the emulators (`npm run test:smoke`, plus browser runs of every write path). Next: M4.
 
 | Milestone | Content | Exit criterion |
 |---|---|---|

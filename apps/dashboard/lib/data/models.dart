@@ -70,6 +70,7 @@ class GuyubEvent {
     this.description = '',
     this.location = '',
     this.capacity,
+    this.registeredCount = 0,
   });
 
   final String id;
@@ -81,6 +82,17 @@ class GuyubEvent {
   final int? capacity;
   final EventStatus status;
   final bool registrationOpen;
+
+  /// Maintained by the registerForEvent and cancelRegistration functions.
+  final int registeredCount;
+
+  bool get isFull => capacity != null && registeredCount >= capacity!;
+
+  /// Null when there is no capacity limit.
+  int? get spotsLeft => capacity == null ? null : (capacity! - registeredCount).clamp(0, capacity!);
+
+  /// Whether a new attendee could register right now (the server decides for real).
+  bool get acceptsRegistrations => status == EventStatus.active && registrationOpen && !isFull;
 
   EventDraft toDraft() =>
       EventDraft(title: title, description: description, location: location, date: date, capacity: capacity);
@@ -96,6 +108,7 @@ class GuyubEvent {
         capacity: draft.capacity,
         status: status,
         registrationOpen: registrationOpen,
+        registeredCount: registeredCount,
       );
 
   GuyubEvent withStatus(EventStatus next, {required bool registrationOpen}) => GuyubEvent(
@@ -108,7 +121,57 @@ class GuyubEvent {
         capacity: capacity,
         status: next,
         registrationOpen: registrationOpen,
+        registeredCount: registeredCount,
       );
+
+  GuyubEvent withRegisteredCount(int count) => GuyubEvent(
+        id: id,
+        orgId: orgId,
+        title: title,
+        description: description,
+        location: location,
+        date: date,
+        capacity: capacity,
+        status: status,
+        registrationOpen: registrationOpen,
+        registeredCount: count,
+      );
+}
+
+/// An attendee's registration for one event: their ticket.
+class Registration {
+  const Registration({
+    required this.eventId,
+    required this.userId,
+    required this.qrToken,
+    this.isCheckedIn = false,
+    this.registeredAt,
+  });
+
+  final String eventId;
+  final String userId;
+
+  /// Secret per ticket. Only used to sign the rotating QR code.
+  final String qrToken;
+  final bool isCheckedIn;
+  final DateTime? registeredAt;
+
+  String get attendanceId => '${eventId}_$userId';
+}
+
+/// A registration with its event, for the ticket list.
+class Ticket {
+  const Ticket(this.registration, this.event);
+
+  final Registration registration;
+  final GuyubEvent event;
+}
+
+enum RegistrationOutcome {
+  registered,
+
+  /// Already registered: the server returned the existing ticket.
+  existing,
 }
 
 /// The fields an organizer edits. Status and registration change through

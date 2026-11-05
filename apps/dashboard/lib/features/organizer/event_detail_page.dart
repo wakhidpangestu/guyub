@@ -82,6 +82,7 @@ class _Summary extends StatelessWidget {
         line(Icons.schedule, formatEventDate(context, event.date)),
         if (event.location.isNotEmpty) line(Icons.place_outlined, event.location),
         line(Icons.people_outline, event.capacity == null ? 'No capacity limit' : 'Capacity: ${event.capacity}'),
+        line(Icons.how_to_reg, '${event.registeredCount} registered${event.isFull ? ' (full)' : ''}'),
         if (event.description.isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(event.description, style: theme.textTheme.bodyLarge),
@@ -119,11 +120,13 @@ class _StatusActions extends StatelessWidget {
             label: const Text('Publish'),
           ),
           edit,
-          TextButton.icon(
-            onPressed: () => _delete(context, backend),
-            icon: const Icon(Icons.delete_outline),
-            label: const Text('Delete draft'),
-          ),
+          // A draft that was published before may still have tickets.
+          if (event.registeredCount == 0)
+            TextButton.icon(
+              onPressed: () => _delete(context, backend),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Delete draft'),
+            ),
         ],
       EventStatus.active => [
           FilledButton.icon(

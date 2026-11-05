@@ -58,14 +58,15 @@ service cloud.firestore {
     }
 
     // ---- organizations/{orgId} --------------------------------------
-    // Created by admin. The document ID is the slug. Members of the org can
-    // read their own org. Organizations are never deleted from the client.
+    // Created by admin. The document ID is the slug. Any signed-in user can
+    // read organizations: the name is public and attendees see it on event
+    // cards. Organizations are never deleted from the client.
     match /organizations/{orgId} {
       function isValidOrgName(data) {
         return data.name is string && data.name.size() >= 2 && data.name.size() <= 80;
       }
 
-      allow read: if isAdmin() || sameOrg(orgId);
+      allow read: if signedIn();
 
       allow create: if isAdmin()
         && orgId.matches('^[a-z0-9][a-z0-9-]{1,39}$')
@@ -105,7 +106,7 @@ service cloud.firestore {
           && data.keys().hasOnly([
             'organization_id', 'title', 'description', 'location', 'date', 'capacity',
             'status', 'registration_open', 'banner_url', 'certificate_template_url',
-            'created_by', 'created_at', 'updated_at'
+            'registered_count', 'created_by', 'created_at', 'updated_at'
           ])
           && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
           && data.status in ['draft', 'active', 'completed']
@@ -126,17 +127,27 @@ service cloud.firestore {
           || (before == 'active' && (after == 'draft' || after == 'completed'));
       }
 
+      // registered_count is maintained only by the registerForEvent and
+      // cancelRegistration Cloud Functions.
+      function registeredCount(data) {
+        return data.get('registered_count', 0);
+      }
+
       // Committee sees only events it is assigned to (per-event scope, SPEC §0.3).
+      // A registered attendee keeps seeing the event after it is completed or
+      // moved back to draft, so their ticket still shows its details.
       allow read: if isAdmin()
         || (signedIn() && resource.data.status == 'active')
         || (isOrganizer() && sameOrg(resource.data.organization_id))
-        || isAssignedCommittee(eventId);
+        || isAssignedCommittee(eventId)
+        || (signedIn() && exists(/databases/$(database)/documents/attendance/$(eventId + '_' + request.auth.uid)));
 
-      // New events always start as drafts.
+      // New events always start as drafts with nobody registered.
       allow create: if isOrganizer()
         && sameOrg(request.resource.data.organization_id)
         && isValidEvent(request.resource.data)
         && request.resource.data.status == 'draft'
+        && registeredCount(request.resource.data) == 0
         && request.resource.data.created_by == request.auth.uid;
 
       allow update: if isOrganizer()
@@ -144,12 +155,15 @@ service cloud.firestore {
         && isValidEvent(request.resource.data)
         && request.resource.data.organization_id == resource.data.organization_id
         && request.resource.data.created_by == resource.data.created_by
+        && registeredCount(request.resource.data) == registeredCount(resource.data)
         && isValidTransition(resource.data.status, request.resource.data.status);
 
-      // Only drafts can be deleted: published events may have registrations.
+      // Only drafts nobody registered for can be deleted. A published event
+      // moved back to draft may still have tickets.
       allow delete: if isOrganizer()
         && sameOrg(resource.data.organization_id)
-        && resource.data.status == 'draft';
+        && resource.data.status == 'draft'
+        && registeredCount(resource.data) == 0;
 
       // ---- events/{eventId}/committees/{uid} ----------------------
       // Organizer assigns committee members to their own org's events.
@@ -192,26 +206,17 @@ service cloud.firestore {
     // ---- attendance/{attendanceId} ----------------------------------
     // ID is `${eventId}_${uid}` so one person cannot register twice.
     //
-    // Create: attendee registers self for an active, open event,
-    //         with privacy consent recorded, not yet checked in.
+    // Create: only the registerForEvent Cloud Function. It checks consent,
+    //         registration state, and capacity in one transaction, and
+    //         issues the secret qr_token. Clients cannot do either safely.
     // Read:   attendee (own), admin, organizer of the org,
     //         committee assigned to the event.
     // Update: assigned committee may only set check-in fields, and only
     //         to checked-in. Certificate and QR fields are Cloud Functions only.
-    // Delete: never from clients (retention is handled server-side).
+    // Delete: only cancelRegistration (frees the spot). Never from clients.
     match /attendance/{attendanceId} {
 
-      allow create: if signedIn()
-        && role() == 'attendee'
-        && attendanceId == request.resource.data.event_id + '_' + request.auth.uid
-        && request.resource.data.user_id == request.auth.uid
-        && request.resource.data.is_checked_in == false
-        && request.resource.data.certificate_issued == false
-        && request.resource.data.privacy_consent == true
-        && request.resource.data.keys().hasAll(['event_id', 'user_id', 'organization_id', 'privacy_consent', 'consent_at'])
-        && get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.status == 'active'
-        && get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.registration_open == true
-        && get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.organization_id == request.resource.data.organization_id;
+      allow create: if false;
 
       // Committee also carries an orgId, so the org branch is organizer-only.
       // Otherwise every committee member could read the whole org's attendance.
