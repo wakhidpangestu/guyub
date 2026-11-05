@@ -14,21 +14,25 @@ Read `docs/SPEC.md` first. Its §0 decision log is locked. Setup and run steps a
   - Functions: `setUserClaims` (admin only, validates org exists), `onUserCreated` (creates attendee profile, never overwrites), shared logic in `src/claims.ts`.
   - `npm run set-role` script bootstraps the first admin and seeds demo roles.
 - **Rule fixes in M1:** missing `role` claim no longer denies attendees; Storage certificate path used an invalid partial wildcard; Storage event assets are now checked against the event's org through `firestore.get()`.
-- **Tests:** `functions` 7 passing (`npm test`). `apps/dashboard` 51 passing (`flutter test`). `flutter analyze` clean. `flutter build web` passes.
+- **Live role change:** the app follows a server-side role change to the new dashboard (no "No access" detour).
+- **Dev tooling:** `firebase-tools` and the rules test kit are root dev dependencies (`npx firebase`, no global install). `npm run emulators` keeps data in `.emulator-data/`. `npm run seed` creates one Google demo account per role. `scripts/dev.ps1` starts the whole stack on Windows.
+- **Rules fix found by tests:** committee members read every attendance record and draft event of their org through the `sameOrg` branch. That branch is now organizer-only.
+- **Tests:** functions 7, Flutter 52, rules 40, M1 smoke 6. All passing. `flutter analyze` clean.
 
-## Not verified yet
+## Verified end-to-end (emulators, headless Chrome)
 
-- Java is not installed on the dev machine, so the Firestore and Storage emulators have not run. Rules are untested.
-- The app has not run end-to-end against the emulators (Google popup, claims, live refresh). Widget tests cover the flow with a fake backend.
+- Deep link `/organizer` while signed out, then login page, Google popup, `organizer@guyub.test`, and the Organizer dashboard. Checked in the release build (Hosting emulator) and in debug `flutter run` on port 8090.
+- Signed in as attendee, then `set-role --role committee`. The open app switched to the Committee dashboard within about 6 seconds.
 
 ## Next, in order (SPEC §7)
 
-1. Install Java 21+ and `firebase-tools`. Run the emulators. Walk the M1 flow by hand. Add rules tests with `@firebase/rules-unit-testing`.
-2. **M2:** Admin creates organizations and grants organizer. Organizer event CRUD. Committee assignment writes `events/{id}/committees/{uid}`; a Cloud Function checks the assignee's `orgId`.
-3. **M3:** Attendee browse, register (consent toggle, `${eventId}_${uid}` ID), QR ticket.
-4. **M4:** Committee scanner. Check-in writes only `is_checked_in`, `checked_in_at`, `checked_in_by`.
-5. **M5:** Certificate function and email on check-in. Batch sends (Gmail SMTP caps).
-6. **M6:** Twibbon (client-side canvas), Google Sheets export, Next.js landing, deploy.
+1. **M2:** Admin creates organizations and grants organizer. Organizer event CRUD. Committee assignment writes `events/{id}/committees/{uid}`; a Cloud Function checks the assignee's `orgId`.
+2. **M3:** Attendee browse, register (consent toggle, `${eventId}_${uid}` ID), QR ticket.
+3. **M4:** Committee scanner. Check-in writes only `is_checked_in`, `checked_in_at`, `checked_in_by`.
+4. **M5:** Certificate function and email on check-in. Batch sends (Gmail SMTP caps).
+5. **M6:** Twibbon (client-side canvas), Google Sheets export, Next.js landing, deploy.
+
+Every new collection or rule change needs a case in `tests/rules/`. Every new callable needs a smoke test in `tests/smoke/`.
 
 ## Open items
 

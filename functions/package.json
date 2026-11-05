@@ -13,6 +13,7 @@
     "serve": "npm run build && firebase emulators:start --only functions,firestore,auth",
     "deploy": "firebase deploy --only functions",
     "set-role": "npm run build && node --experimental-strip-types scripts/set-role.mts",
+    "seed": "npm run build && node --experimental-strip-types scripts/seed-emulator.mts",
     "test": "npm run build && node --experimental-strip-types --test test/claims.test.mts"
   },
   "devDependencies": {

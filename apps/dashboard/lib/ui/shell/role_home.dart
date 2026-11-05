@@ -40,7 +40,10 @@ class RoleHome extends StatelessWidget {
           Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1100),
-              child: Column(
+              // Full width up to the max, so pages with few cards stay left-aligned.
+              child: SizedBox(
+                width: double.infinity,
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Welcome, $name', style: theme.textTheme.headlineSmall),
@@ -53,6 +56,7 @@ class RoleHome extends StatelessWidget {
                     children: [for (final feature in features) _FeatureCard(feature)],
                   ),
                 ],
+                ),
               ),
             ),
           ),

@@ -64,9 +64,10 @@ service cloud.firestore {
     // Organizer of the owning org manages drafts and events.
     // Assigned committee reads the event it scans for.
     match /events/{eventId} {
+      // Committee sees only events it is assigned to (per-event scope, SPEC §0.3).
       allow read: if isAdmin()
         || (signedIn() && resource.data.status == 'active')
-        || sameOrg(resource.data.organization_id)
+        || (isOrganizer() && sameOrg(resource.data.organization_id))
         || isAssignedCommittee(eventId);
 
       allow create: if isOrganizer()
@@ -118,10 +119,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.registration_open == true
         && get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.organization_id == request.resource.data.organization_id;
 
+      // Committee also carries an orgId, so the org branch is organizer-only.
+      // Otherwise every committee member could read the whole org's attendance.
       allow read: if signedIn() && (
         resource.data.user_id == request.auth.uid
         || isAdmin()
-        || sameOrg(resource.data.organization_id)
+        || (isOrganizer() && sameOrg(resource.data.organization_id))
         || isAssignedCommittee(resource.data.event_id)
       );
 

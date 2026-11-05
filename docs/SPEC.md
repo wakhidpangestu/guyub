@@ -129,7 +129,7 @@ Generated from `certificate_template_url` with the attendee's name. Stored at `c
 
 M0–M4 is the 1-week core MVP sprint. M5–M6, polish, and the demo video run until 16 Dec (§0 decision 7).
 
-Status: M0 done except rules tests (needs Java for the emulator). M1 done (code and tests; not yet run end-to-end against the emulators).
+Status: M0 done (rules tests: `npm run test:rules`). M1 done and verified end-to-end on the emulators (`npm run test:smoke`, plus a browser run). Next: M2.
 
 | Milestone | Content | Exit criterion |
 |---|---|---|

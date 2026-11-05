@@ -105,11 +105,22 @@ void main() {
     repo.emit(const SignedIn(uid: 'u1', role: UserRole.committee, orgId: 'himatif', displayName: 'Rina'));
     await tester.pumpAndSettle();
 
-    // Still on /attendee, which now belongs to another role.
-    expect(find.text('No access to this area'), findsOneWidget);
-    await tester.tap(find.text('Go to my dashboard'));
-    await tester.pumpAndSettle();
+    // Moves straight to the new role's dashboard, no "No access" detour.
+    expect(find.text('No access to this area'), findsNothing);
     expect(find.widgetWithText(Chip, 'Committee'), findsOneWidget);
+  });
+
+  testWidgets('a different user signing in does not trigger the role-change jump', (tester) async {
+    await pumpApp(tester);
+    await signIn(tester, UserRole.attendee);
+    GoRouter.of(tester.element(find.text('Welcome, Rina'))).go('/admin');
+    await tester.pumpAndSettle();
+    expect(find.text('No access to this area'), findsOneWidget);
+
+    // Same role, same user: stays on the forbidden page.
+    repo.emit(const SignedIn(uid: 'u1', role: UserRole.attendee, displayName: 'Rina'));
+    await tester.pumpAndSettle();
+    expect(find.text('No access to this area'), findsOneWidget);
   });
 
   testWidgets('sign-out returns to login', (tester) async {

@@ -17,7 +17,11 @@ out/
 firebase-debug.log*
 firestore-debug.log*
 ui-debug.log*
+database-debug.log*
+pubsub-debug.log*
 .firebase/
+# Local emulator data (accounts, documents). Saved on Ctrl+C by `npm run emulators`.
+.emulator-data/
 
 # Secrets — never commit
 .env
