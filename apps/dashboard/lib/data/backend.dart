@@ -85,4 +85,14 @@ abstract interface class Backend {
   Future<RegistrationOutcome> register(String eventId);
 
   Future<void> cancelRegistration(String eventId);
+
+  // ---- Check-in (M4) --------------------------------------------------
+  /// Registrations for one event, live. Organizers must pass their [orgId]
+  /// (the rules only allow organizer queries that name the org); assigned
+  /// committee members pass null.
+  Stream<List<Registration>> watchAttendance(String eventId, {String? orgId});
+
+  /// Checks someone in with a scanned or typed code ([payload]) or, for
+  /// organizers, manually by [attendanceId]. Exactly one must be given.
+  Future<CheckInOutcome> checkIn(String eventId, {String? payload, String? attendanceId});
 }

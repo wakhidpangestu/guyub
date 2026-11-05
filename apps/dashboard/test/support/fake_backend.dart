@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:guyub_dashboard/auth/user_role.dart';
 import 'package:guyub_dashboard/data/backend.dart';
 import 'package:guyub_dashboard/data/models.dart';
+import 'package:guyub_dashboard/data/ticket_code.dart';
 
 /// In-memory [Backend] for widget tests. Every write notifies all watchers.
 /// Mirrors the server rules that the UI relies on (status transitions,
@@ -27,6 +28,7 @@ class FakeBackend implements Backend {
   /// The signed-in user for [register]. Must match the Harness uid and role.
   String currentUid = 'u1';
   UserRole currentRole = UserRole.attendee;
+  String? currentOrgId;
 
   /// "Today" for [watchUpcomingEvents].
   DateTime today = DateTime(2026, 11, 5);
@@ -82,12 +84,13 @@ class FakeBackend implements Backend {
     return event;
   }
 
-  Registration addRegistration(String eventId, {String? uid, bool checkedIn = false, bool withKey = true, String? name}) {
+  Registration addRegistration(String eventId, {String? uid, bool checkedIn = false, bool withKey = true, String? name, DateTime? checkedInAt}) {
     final registration = Registration(
       eventId: eventId,
       userId: uid ?? currentUid,
       attendeeName: name,
       isCheckedIn: checkedIn,
+      checkedInAt: checkedIn ? (checkedInAt ?? DateTime(2026, 12, 1, 9, 5)) : null,
     );
     registrations[registration.attendanceId] = registration;
     if (withKey) ticketKeys[registration.attendanceId] = 'token-$eventId';
@@ -288,5 +291,67 @@ class FakeBackend implements Backend {
     final event = events[eventId];
     if (event != null) events[eventId] = event.withRegisteredCount(event.registeredCount - 1);
     _changed();
+  }
+
+  // ---- Check-in ------------------------------------------------------------
+
+  /// Every checkIn call, for assertions: payload or attendance ID.
+  final checkInCalls = <String>[];
+
+  @override
+  Stream<List<Registration>> watchAttendance(String eventId, {String? orgId}) => _watch(() =>
+      registrations.values.where((r) => r.eventId == eventId).toList()..sort((a, b) => a.label.compareTo(b.label)));
+
+  /// Same decisions as functions/src/checkin.ts, with the real ticket code.
+  @override
+  Future<CheckInOutcome> checkIn(String eventId, {String? payload, String? attendanceId}) async {
+    _maybeFail();
+    checkInCalls.add(payload ?? attendanceId!);
+    final event = events[eventId];
+    if (event == null) throw const BackendFailure('This event does not exist.');
+    final manual = attendanceId != null;
+    final assigned = assignments[eventId]?.containsKey(currentUid) ?? false;
+    final organizerHere = currentRole == UserRole.organizer && currentOrgId == event.orgId;
+    if (!organizerHere && !(currentRole == UserRole.committee && assigned)) {
+      throw const BackendFailure('You are not assigned to check people in at this event.');
+    }
+    if (manual && !organizerHere) throw const BackendFailure('Committee members check people in by scanning their ticket.');
+
+    String id;
+    CheckInResult? codeProblem; // null: the code is fine, or this is a manual check-in
+    if (manual) {
+      id = attendanceId;
+    } else {
+      final match = RegExp(r'^G1\.(.+)\.(\d+)\.([0-9a-f]{16})$').firstMatch(payload!);
+      if (match == null) return const CheckInOutcome(CheckInResult.invalid);
+      id = match.group(1)!;
+      if (!id.startsWith('${eventId}_')) return const CheckInOutcome(CheckInResult.wrongEvent);
+      final key = ticketKeys[id];
+      final window = int.parse(match.group(2)!);
+      if (key == null || ticketPayload(key, id, window) != payload) {
+        codeProblem = CheckInResult.invalid;
+      } else if ((ticketWindowAt(DateTime.now()) - window).abs() > 2) {
+        codeProblem = CheckInResult.expired;
+      }
+    }
+
+    // Same order as decideCheckIn: closed, not registered, code, then state.
+    if (event.status != EventStatus.active) return const CheckInOutcome(CheckInResult.closed);
+    final registration = registrations[id];
+    if (registration == null) return const CheckInOutcome(CheckInResult.notRegistered);
+    if (codeProblem != null) return CheckInOutcome(codeProblem, attendeeName: registration.attendeeName);
+    if (registration.isCheckedIn) {
+      return CheckInOutcome(CheckInResult.alreadyCheckedIn, attendeeName: registration.attendeeName, checkedInAt: registration.checkedInAt);
+    }
+    registrations[id] = Registration(
+      eventId: registration.eventId,
+      userId: registration.userId,
+      attendeeName: registration.attendeeName,
+      isCheckedIn: true,
+      checkedInAt: DateTime.now(),
+      checkInMethod: manual ? 'manual' : 'scan',
+    );
+    _changed();
+    return CheckInOutcome(CheckInResult.checkedIn, attendeeName: registration.attendeeName);
   }
 }

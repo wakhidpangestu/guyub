@@ -212,8 +212,8 @@ service cloud.firestore {
     //         do either safely.
     // Read:   attendee (own), admin, organizer of the org,
     //         committee assigned to the event.
-    // Update: assigned committee may only set check-in fields, and only
-    //         to checked-in. Certificate and QR fields are Cloud Functions only.
+    // Update: only the checkIn Cloud Function (verified QR, or an organizer's
+    //         manual check-in). Certificate fields are Cloud Functions only.
     // Delete: only cancelRegistration (frees the spot). Never from clients.
     match /attendance/{attendanceId} {
 
@@ -228,12 +228,10 @@ service cloud.firestore {
         || isAssignedCommittee(resource.data.event_id)
       );
 
-      allow update: if isAssignedCommittee(resource.data.event_id)
-        && get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.status == 'active'
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['is_checked_in', 'checked_in_at', 'checked_in_by'])
-        && request.resource.data.is_checked_in == true
-        && request.resource.data.checked_in_by == request.auth.uid;
+      // Check-in goes through the checkIn Cloud Function, which verifies the
+      // rotating QR against the ticket key. A client-side update path would
+      // let staff mark anyone present without a ticket (audit H1).
+      allow update: if false;
 
       allow delete: if false;
     }

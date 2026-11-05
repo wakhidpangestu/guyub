@@ -33,8 +33,14 @@ Read `docs/SPEC.md` first. Its §0 decision log is locked. Setup and run steps a
   - Dynamic QR (`src/tickets.ts` and `lib/data/ticket_code.dart`): HMAC of a per-ticket token and a 30-second window. `verifyTicket` (valid, expired, invalid) is ready for M4.
   - My tickets list and ticket page (rotating QR with countdown, checked-in and completed states).
   - Seed: `attendee@guyub.test` holds a ticket for the Tech Talk.
+- **M4 check-in:**
+  - `checkIn` callable: authorization (`authorizeCheckIn`), early code checks (`classifyScan`), and the final decision (`decideCheckIn`) are pure functions in `src/checkin.ts`. One transaction reads event, attendance, and secret, so two doors scanning one ticket record one check-in.
+  - Rules: attendance `allow update: if false` (audit H1). Committee lists its assigned event's attendance; organizers list attendance with a query that names their org.
+  - Door screen (`lib/features/checkin/scan_page.dart`) for committee (`/committee/events/:id`) and organizers (`/organizer/events/:id/scan`): camera via `mobile_scanner` (BarcodeDetector or zxing-wasm on the web), a code field that also takes USB scanners, a result card per outcome, a live counter, recent check-ins.
+  - Organizer attendance page (`/organizer/events/:id/attendance`): live list, search, filter, manual check-in.
+  - Committee event tiles open the door screen (audit L1).
 - **Dev tooling:** root dev deps (`npx firebase`), `npm run emulators` with saved data, `npm run seed` (demo accounts, events, assignment, ticket), `scripts/dev.ps1`. Tests run on separate ports (`firebase.test.json`) so they never touch dev data.
-- **Tests:** functions 39, Flutter 101, rules 64, smoke 22. All passing. `flutter analyze` clean.
+- **Tests:** functions 51, Flutter 118, rules 71, smoke 36. All passing. `flutter analyze` clean.
 
 ## Verified end-to-end (emulators, headless Chrome, release build)
 
@@ -49,11 +55,15 @@ Read `docs/SPEC.md` first. Its §0 decision log is locked. Setup and run steps a
   - Attendee browses (org names, Registered and spots-left badges), registers with the consent checkbox, lands on the ticket; `registered_count` goes up.
   - The QR decoded from a screenshot of the release build verifies with the server's `verifyTicket`: valid at that time, expired two minutes later, invalid with another token. This proves the dart2js HMAC matches Node.
 
+- M4, through the real UI, real rules, and a real camera path:
+  - Headless Chrome with a fake webcam (an MJPEG of a live ticket QR): `mobile_scanner` decoded it and the attendee was checked in (`check_in_method: scan`). The green result stays while the person stands in front of the camera.
+  - Pasting a code into the field checks in; a non-ticket shows "Not a valid ticket".
+  - Organizer attendance page shows live state; manual check-in records `check_in_method: manual`.
+
 ## Next, in order (SPEC §7)
 
-1. **M4:** Committee scanner for assigned events (camera in the browser). `checkIn` callable: parse the payload, check the scanner is assigned to the event, `verifyTicket`, then set `is_checked_in`, `checked_in_at`, `checked_in_by`. Remove the client-side attendance update rule so check-in cannot skip the QR. Live attendance count for the organizer.
-2. **M5:** Certificate function and email on check-in. Batch sends (Gmail SMTP caps).
-3. **M6:** Twibbon (client-side canvas), Google Sheets export, platform metrics, Next.js landing, deploy.
+1. **M5:** Certificate function and email on check-in. Batch sends (Gmail SMTP caps). Certificate template stays private (audit L6).
+2. **M6:** Twibbon (client-side canvas), Google Sheets export, platform metrics, Next.js landing, deploy.
 
 Every new collection or rule change needs a case in `tests/rules/`. Every new callable needs a smoke test in `tests/smoke/`. Every new page needs a widget test with `FakeBackend`.
 

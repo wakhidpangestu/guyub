@@ -280,6 +280,34 @@ class FirebaseBackend implements Backend {
   Future<void> cancelRegistration(String eventId) =>
       _guard(() => _functions.httpsCallable('cancelRegistration').call<Map<String, dynamic>>({'eventId': eventId}));
 
+  // ---- Check-in -----------------------------------------------------------
+
+  @override
+  Stream<List<Registration>> watchAttendance(String eventId, {String? orgId}) {
+    Query<Map<String, dynamic>> query = _attendance.where('event_id', isEqualTo: eventId);
+    if (orgId != null) query = query.where('organization_id', isEqualTo: orgId);
+    return query
+        .snapshots()
+        .map((s) => s.docs.map(_registration).toList()..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase())))
+        .mapErrors();
+  }
+
+  @override
+  Future<CheckInOutcome> checkIn(String eventId, {String? payload, String? attendanceId}) => _guard(() async {
+        final result = await _functions.httpsCallable('checkIn').call<Map<String, dynamic>>({
+          'eventId': eventId,
+          'payload': ?payload,
+          'attendanceId': ?attendanceId,
+        });
+        final data = result.data;
+        final at = data['checkedInAt'];
+        return CheckInOutcome(
+          CheckInResult.parse(data['result']),
+          attendeeName: data['attendeeName'] as String?,
+          checkedInAt: at is String ? DateTime.tryParse(at) : null,
+        );
+      });
+
   // ---- Mapping ------------------------------------------------------------
 
   static Registration _registration(_Doc d) {
@@ -292,6 +320,7 @@ class FirebaseBackend implements Backend {
       isCheckedIn: data['is_checked_in'] == true,
       registeredAt: time(data['registered_at']),
       checkedInAt: time(data['checked_in_at']),
+      checkInMethod: data['check_in_method'] as String?,
     );
   }
 

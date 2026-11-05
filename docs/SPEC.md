@@ -84,7 +84,8 @@ attendance/{attendanceId}              (ID = `${eventId}_${uid}`)  CHANGED: dete
 
 attendance_secrets/{attendanceId}      NEW (M3, audit H2) owner-read-only, Cloud Functions write
   user_id, event_id, qr_token (random secret that signs the rotating QR, see §5), created_at
-  is_checked_in, checked_in_at, checked_in_by   NEW
+  is_checked_in, checked_in_at, checked_in_by   NEW, written only by checkIn
+  check_in_method: "scan" | "manual"   NEW (M4)
   certificate_issued, certificate_url  NEW
   registered_at                        NEW
   privacy_consent: boolean             NEW (must be true to register)
@@ -122,8 +123,11 @@ Not built: invite emails. The inviter tells the person to sign in.
 Clients cannot create attendance at all (rules: `allow create: if false`). Only attendee accounts register. An organizer or committee member cannot attend another org's event with the same account (known limitation).
 
 **Check-in (committee)**
-1. Committee scans QR. The app sends the payload to a `checkIn` callable (M4), which runs `verifyTicket` against the stored `qr_token` and the committee member's assignment.
-2. The function sets `is_checked_in = true`, `checked_in_at`, `checked_in_by`. M4 removes the current client-side update rule, so check-in cannot skip the QR check.
+1. A committee member assigned to the event (or an organizer of its org) scans the QR, types or pastes the code, or uses a USB scanner. The app sends it to the `checkIn` callable.
+2. The function checks who is scanning (`authorizeCheckIn`), parses the code, reads the attendance and its secret in one transaction, runs `verifyTicket`, and decides with `decideCheckIn`: checked in, already checked in, expired, invalid, wrong event, not registered, or closed.
+3. On success it sets `is_checked_in`, `checked_in_at`, `checked_in_by`, and `check_in_method` (`scan` or `manual`). Clients cannot update attendance at all (audit H1).
+4. Organizers can check someone in manually by attendance ID, for a phone that cannot show the ticket. Committee members cannot.
+5. The door screen ignores repeats of the same ticket for 15 seconds after a final result, so a person standing in front of the camera does not flip from "Checked in" to "Already checked in".
 3. Cloud Function `onAttendanceCheckedIn` (phase 1 milestone) issues certificate and emails it.
 
 **Certificate**
@@ -153,7 +157,7 @@ Dynamic QR, built in M3 (`functions/src/tickets.ts`, `apps/dashboard/lib/data/ti
 
 M0–M4 is the 1-week core MVP sprint. M5–M6, polish, and the demo video run until 16 Dec (§0 decision 7).
 
-Status: M0 to M3 done and verified end-to-end on the emulators (`npm run test:smoke`, plus browser runs of every write path). Next: M4.
+Status: M0 to M4 done and verified end-to-end on the emulators (`npm run test:smoke`, plus browser runs of every write path, including camera scanning). Next: M5.
 
 | Milestone | Content | Exit criterion |
 |---|---|---|

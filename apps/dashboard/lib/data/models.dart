@@ -159,6 +159,7 @@ class Registration {
     this.isCheckedIn = false,
     this.registeredAt,
     this.checkedInAt,
+    this.checkInMethod,
   });
 
   final String eventId;
@@ -167,6 +168,9 @@ class Registration {
   final bool isCheckedIn;
   final DateTime? registeredAt;
   final DateTime? checkedInAt;
+
+  /// "scan" or "manual", set by the checkIn function.
+  final String? checkInMethod;
 
   String get attendanceId => '${eventId}_$userId';
 
@@ -179,6 +183,35 @@ class Ticket {
 
   final Registration registration;
   final GuyubEvent event;
+}
+
+/// Outcome of one check-in attempt, from the checkIn Cloud Function.
+enum CheckInResult {
+  checkedIn('checked_in'),
+  alreadyCheckedIn('already_checked_in'),
+  expired('expired'),
+  invalid('invalid'),
+  wrongEvent('wrong_event'),
+  notRegistered('not_registered'),
+  closed('closed');
+
+  const CheckInResult(this.wire);
+
+  /// Value sent by the server.
+  final String wire;
+
+  static CheckInResult parse(Object? value) =>
+      values.firstWhere((r) => r.wire == value, orElse: () => CheckInResult.invalid);
+}
+
+class CheckInOutcome {
+  const CheckInOutcome(this.result, {this.attendeeName, this.checkedInAt});
+
+  final CheckInResult result;
+  final String? attendeeName;
+
+  /// For [CheckInResult.alreadyCheckedIn]: when they first came in.
+  final DateTime? checkedInAt;
 }
 
 enum RegistrationOutcome {

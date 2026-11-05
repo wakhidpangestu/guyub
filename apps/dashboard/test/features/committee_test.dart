@@ -19,7 +19,7 @@ void main() {
     expect(find.text('Your events'), findsOneWidget);
     expect(find.text('Tech Talk'), findsOneWidget);
     expect(find.text('Workshop'), findsNothing);
-    expect(find.text('Planned · M4'), findsOneWidget, reason: 'scanner is labelled as not built yet');
+    expect(find.text('Planned · M4'), findsNothing, reason: 'the scanner is built now');
   });
 
   testWidgets('explains an empty assignment list', (tester) async {

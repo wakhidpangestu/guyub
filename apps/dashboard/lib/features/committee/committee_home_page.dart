@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../auth/auth_scope.dart';
 import '../../auth/auth_state.dart';
@@ -21,7 +22,7 @@ class CommitteeHomePage extends StatelessWidget {
 
     return RoleHome(
       role: UserRole.committee,
-      intro: 'Check in attendees for the events you are assigned to.',
+      intro: 'Open an event to scan tickets at the entrance.',
       body: uid == null
           ? null
           : Column(
@@ -36,18 +37,14 @@ class CommitteeHomePage extends StatelessWidget {
                     icon: Icons.event_available_outlined,
                     message: 'No events assigned yet. Your organizer assigns you to events.',
                   ),
-                  builder: (context, events) => Column(children: [for (final event in events) EventTile(event: event)]),
+                  builder: (context, events) => Column(children: [
+                    for (final event in events)
+                      EventTile(event: event, onTap: () => context.go('/committee/events/${event.id}')),
+                  ]),
                 ),
               ],
             ),
-      features: const [
-        Feature(
-          icon: Icons.qr_code_scanner,
-          title: 'QR scanner',
-          description: 'Scan an attendee ticket with your phone camera to check them in.',
-          milestone: 'M4',
-        ),
-      ],
+      features: const [],
     );
   }
 }

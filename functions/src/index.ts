@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase-admin/app";
 import { getAuth, type UserRecord } from "firebase-admin/auth";
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, type Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import * as functionsV1 from "firebase-functions/v1";
 import { setGlobalOptions } from "firebase-functions/v2";
@@ -19,7 +19,8 @@ import {
 } from "./members";
 import { attendanceIdFor, decideCancellation, decideRegistration, parseRegistrationRequest } from "./registration";
 import { purgeExpiredAttendance } from "./retention";
-import { newQrToken } from "./tickets";
+import { authorizeCheckIn, classifyScan, decideCheckIn, parseCheckInRequest } from "./checkin";
+import { newQrToken, parseTicketPayload, verifyTicket, type ParsedTicket } from "./tickets";
 
 initializeApp();
 
@@ -302,8 +303,82 @@ export const runRetentionPurge = onCall(async (request) => {
   return purgeExpiredAttendance(getFirestore(), new Date());
 });
 
-// Next milestones:
-//   - onCall "checkIn" (M4): parse and verify the dynamic QR with
-//     tickets.verifyTicket, then mark the attendance checked in.
+/**
+ * Checks an attendee in, from a scanned rotating QR or (organizers only)
+ * manually. The only way attendance becomes checked in: clients cannot write
+ * attendance (audit H1).
+ *
+ * The code is verified against the ticket's key in attendance_secrets, which
+ * only this function and the ticket owner can read. Everything that decides
+ * the outcome is read in one transaction, so two doors scanning the same
+ * ticket at once record one check-in.
+ */
+export const checkIn = onCall(async (request) => {
+  const caller = callerOf(request);
+  try {
+    const req = parseCheckInRequest(request.data);
+    const uid = request.auth!.uid;
+    const db = getFirestore();
+    const eventRef = db.collection("events").doc(req.eventId);
+
+    const [event, assignment] = await Promise.all([eventRef.get(), eventRef.collection("committees").doc(uid).get()]);
+    authorizeCheckIn(caller, event.exists ? (event.get("organization_id") as string) : null, assignment.exists, req.mode === "manual");
+
+    let ticket: ParsedTicket | null = null;
+    let attendanceId: string;
+    if (req.mode === "scan") {
+      ticket = parseTicketPayload(req.payload);
+      const scan = classifyScan(req.eventId, ticket);
+      // Same shape as every other outcome; nothing about the ticket holder.
+      if ("result" in scan) return { result: scan.result, attendeeName: null, checkedInAt: null };
+      attendanceId = scan.attendanceId;
+    } else {
+      attendanceId = req.attendanceId;
+    }
+
+    const attendanceRef = db.collection("attendance").doc(attendanceId);
+    const secretRef = db.collection("attendance_secrets").doc(attendanceId);
+
+    return await db.runTransaction(async (tx) => {
+      const [freshEvent, attendance, secret] = await Promise.all([tx.get(eventRef), tx.get(attendanceRef), tx.get(secretRef)]);
+      const check =
+        req.mode === "manual"
+          ? "manual"
+          : secret.exists
+            ? verifyTicket(ticket!, secret.get("qr_token") as string, Date.now() / 1000)
+            : "invalid";
+      const result = decideCheckIn(
+        freshEvent.get("status") as string,
+        attendance.exists
+          ? { eventId: attendance.get("event_id") as string, isCheckedIn: attendance.get("is_checked_in") === true }
+          : null,
+        req.eventId,
+        check,
+      );
+
+      if (result === "checked_in") {
+        tx.update(attendanceRef, {
+          is_checked_in: true,
+          checked_in_at: FieldValue.serverTimestamp(),
+          checked_in_by: uid,
+          check_in_method: req.mode,
+        });
+      }
+
+      // Only name and time go back to the door: nothing else about the attendee.
+      const known = attendance.exists && result !== "wrong_event";
+      const checkedInAt = known ? (attendance.get("checked_in_at") as Timestamp | undefined) : undefined;
+      return {
+        result,
+        attendeeName: known ? ((attendance.get("attendee_name") as string | null) ?? null) : null,
+        checkedInAt: result === "already_checked_in" && checkedInAt ? checkedInAt.toDate().toISOString() : null,
+      };
+    });
+  } catch (error) {
+    toHttpsError(error);
+  }
+});
+
+// Next milestone:
 //   - onDocumentUpdated("attendance/{id}"): when is_checked_in flips to true,
 //     generate the personalized PDF certificate and email it (M5).

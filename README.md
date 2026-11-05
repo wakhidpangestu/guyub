@@ -203,7 +203,26 @@ Rules to notice while testing:
 - Capacity is enforced on the server in a transaction, so two people cannot take the last spot at the same time.
 - Registering twice is harmless: you get the same ticket.
 - Only attendee accounts can register. Organizer and committee accounts cannot.
-- A screenshot of the QR stops working after about a minute. Check-in itself comes in M4.
+- A screenshot of the QR stops working after about a minute.
+
+### Try the M4 flow
+
+Check-in happens on a phone or laptop at the door. The camera needs a secure origin: `localhost` works on the dev machine; a phone needs the deployed HTTPS site (see Troubleshooting).
+
+1. **Attendee.** On one device or browser, sign in as `attendee@guyub.test` and open **My tickets**, then the Tech Talk ticket. Keep the QR on screen.
+2. **Committee.** On another device or browser, sign in as `committee@guyub.test`. Under **Your events**, open the Tech Talk. Allow the camera.
+3. Point the camera at the attendee's QR. A green **Checked in** card shows the name. The counter goes up, and the name appears under the recent check-ins.
+4. Scan the same ticket again a minute later: an amber **Already checked in** card shows when they first came in.
+5. Take a screenshot of a ticket, wait two minutes, and scan the screenshot: **Code expired**.
+6. No camera? Copy the ticket code into **Ticket code** and press Enter. USB barcode scanners work the same way, because they type the code.
+7. **Organizer.** Sign in as `organizer@guyub.test`, open the Tech Talk, then **Attendance**. You see everyone with their state, live. Search by name, filter by **Checked in** or **Not yet**, and use **Check in** for someone whose phone cannot show the ticket.
+
+Rules to notice while testing:
+- Only committee members assigned to the event, and the event's organizers, can check people in. An unassigned committee member is refused.
+- Committee members must scan. Manual check-in is for organizers only.
+- A ticket for another event, a cancelled ticket, or a forged code is refused with its own message.
+- Check-in is closed while the event is a draft or after it is completed.
+- Two doors scanning the same ticket at the same moment record one check-in.
 
 ---
 
@@ -211,10 +230,10 @@ Rules to notice while testing:
 
 | Command | What it checks | Needs |
 |---|---|---|
-| `npm --prefix functions test` | Roles, invites, registration decisions, QR signing and verification (39 tests) | Node |
-| `cd apps/dashboard; flutter test` | Routing, auth, every page with a fake backend, QR rotation (101 tests) | Flutter |
-| `npm run test:rules` | Firestore and Storage security rules (64 tests) | Java |
-| `npm run test:smoke` | End-to-end on the emulators: sign-in, roles, invites, registration, capacity (22 tests) | Java |
+| `npm --prefix functions test` | Roles, invites, registration, check-in decisions, QR signing, retention (51 tests) | Node |
+| `cd apps/dashboard; flutter test` | Routing, auth, every page with a fake backend, QR rotation, scanner (118 tests) | Flutter |
+| `npm run test:rules` | Firestore and Storage security rules (71 tests) | Java |
+| `npm run test:smoke` | End-to-end on the emulators: roles, invites, registration under load, check-in, retention (36 tests) | Java |
 | `npm test` | Functions, rules, and smoke tests together | Java |
 
 `test:rules` and `test:smoke` start their own emulators from `firebase.test.json` on separate ports (19099, 18080, 15001, 19199). They never touch your dev emulators or their data, so you can run them while `npm run emulators` is up.
@@ -261,6 +280,10 @@ Root `package.json`:
 | **Add organizer** or **Add committee member** spins for several seconds | The first call to a Cloud Function in the emulator starts it cold. Later calls are fast. |
 | App still shows old screens after pulling new code | In the `flutter run` terminal press `R` (hot restart). The emulators reload rules and functions by themselves. |
 | Organizer sees no events after updating | Run `npm run seed` again to add the demo events to existing emulator data. |
+| A ticket says "This ticket cannot show a code" | It was issued before the QR key moved to its own document. Cancel the registration and register again, or run `npm run seed` for the demo ticket. |
+| Scanner says "Camera access is blocked" | Allow the camera for the site in the browser's address bar. Until then, type or paste codes into **Ticket code**. |
+| The camera does not start on a phone | Browsers only allow the camera on HTTPS or `localhost`. A phone opening `http://<laptop-ip>:8090` is neither. Test the camera on the laptop itself, or on the deployed HTTPS site. |
+| Scanner keeps saying "Code expired" | The scanning device's clock or the attendee's clock is off by more than a minute. Set both to automatic time. |
 
 ---
 
@@ -318,10 +341,14 @@ Implemented and verified on the emulators:
 - **M2:** admin creates organizations and adds organizers by email. Organizer creates, edits, publishes, and completes events, opens and closes registration, adds committee members by email, and assigns them per event. Committee members see their assigned events. Invites for people who have not signed in yet apply at their first sign-in.
 
 - **M3:** attendees browse upcoming events from every organization, register after accepting a privacy notice, cancel before check-in, and keep their tickets. Capacity is enforced on the server. Tickets show a QR code that changes every 30 seconds, so screenshots expire.
+- **M4:** committee and organizers check people in at the door with the camera, a typed or pasted code, or a USB scanner. Each outcome has its own message (checked in, already in, expired, invalid, other event, not registered, closed). Organizers follow attendance live and can check someone in by hand. Check-in only happens through a Cloud Function that verifies the code.
+- **Audit fixes:** see `docs/AUDIT.md`. Ticket keys are readable only by their owner, attendance data is deleted 12 months after the event, and attendee emails are not shared with organizers.
 
-Not implemented yet (shown as "Planned" cards in the app): check-in scanner, certificates, Sheets export, twibbon, platform metrics, landing page. See `docs/SPEC.md` §7.
+Not implemented yet (shown as "Planned" cards in the app): certificates, Sheets export, twibbon, platform metrics, landing page. See `docs/SPEC.md` §7.
 
 Known limitations:
+- Check-in needs a network connection (SPEC §0 decision 5).
+- App Check and per-user quotas are not enabled yet; they need a real Firebase project (`docs/AUDIT.md` M3).
 - Only attendee accounts can register. An organizer or committee member cannot attend another organization's event with the same account.
 - Invites are not emailed. The organizer tells the person to sign in with that Google account.
 - Organizations cannot be disabled yet.

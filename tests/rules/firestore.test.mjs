@@ -335,8 +335,25 @@ describe("attendance: check-in", () => {
       checked_in_by: by,
     });
 
-  it("assigned committee checks an attendee in", async () => {
-    await assertSucceeds(checkIn(as.committee, "comA"));
+  it("even assigned committee cannot check in from the client: only checkIn does (audit H1)", async () => {
+    await assertFails(checkIn(as.committee, "comA"));
+    await assertFails(checkIn(as.organizer, "org1"));
+    await assertFails(checkIn(as.admin, "admin1"));
+  });
+
+  it("assigned committee lists its event's attendance for the door screen", async () => {
+    const list = query(collection(db(as.committee), "attendance"), where("event_id", "==", "evtA"));
+    await assertSucceeds(getDocs(list));
+    const otherEvent = query(collection(db(as.committee), "attendance"), where("event_id", "==", "evtB"));
+    await assertFails(getDocs(otherEvent));
+    await assertFails(getDocs(query(collection(db(as.unassignedCommittee), "attendance"), where("event_id", "==", "evtA"))));
+  });
+
+  it("organizer lists an event's attendance when the query names the org", async () => {
+    const list = query(collection(db(as.organizer), "attendance"), where("organization_id", "==", "himatif"), where("event_id", "==", "evtA"));
+    await assertSucceeds(getDocs(list));
+    const otherOrg = query(collection(db(as.organizer), "attendance"), where("organization_id", "==", "bem"), where("event_id", "==", "evtB"));
+    await assertFails(getDocs(otherOrg));
   });
 
   it("unassigned committee cannot check in", async () => {

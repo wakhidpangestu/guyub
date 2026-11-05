@@ -36,6 +36,7 @@ class EventDetailPage extends StatelessWidget {
                       _Summary(event),
                       const SizedBox(height: 16),
                       _StatusActions(event),
+                      _CheckIn(event),
                       _Committee(event),
                     ],
                   ),
@@ -212,6 +213,39 @@ class _StatusActions extends StatelessWidget {
     if (await runAction(context, () => backend.deleteEvent(event.id), success: 'Draft deleted.')) {
       router.go('/organizer/events');
     }
+  }
+}
+
+/// Door tools: scanner and live attendance list.
+class _CheckIn extends StatelessWidget {
+  const _CheckIn(this.event);
+
+  final GuyubEvent event;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader('Check-in', subtitle: 'Scan tickets at the door and follow attendance live.'),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            FilledButton.tonalIcon(
+              onPressed: () => context.go('/organizer/events/${event.id}/attendance'),
+              icon: const Icon(Icons.fact_check_outlined),
+              label: Text('Attendance (${event.registeredCount} registered)'),
+            ),
+            OutlinedButton.icon(
+              onPressed: event.status == EventStatus.active ? () => context.go('/organizer/events/${event.id}/scan') : null,
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text('Open scanner'),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 

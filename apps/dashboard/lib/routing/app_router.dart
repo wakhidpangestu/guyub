@@ -10,7 +10,9 @@ import '../features/attendee/attendee_home_page.dart';
 import '../features/attendee/browse_events_page.dart';
 import '../features/attendee/ticket_page.dart';
 import '../features/attendee/tickets_page.dart';
+import '../features/checkin/scan_page.dart';
 import '../features/committee/committee_home_page.dart';
+import '../features/organizer/attendance_page.dart';
 import '../features/organizer/committee_page.dart';
 import '../features/organizer/event_detail_page.dart';
 import '../features/organizer/event_form_page.dart';
@@ -73,6 +75,14 @@ GoRouter createRouter(AuthController auth, {String? initialLocation}) {
                     path: 'edit',
                     builder: (context, state) => EventFormPage(eventId: state.pathParameters['eventId']),
                   ),
+                  GoRoute(
+                    path: 'attendance',
+                    builder: (context, state) => AttendancePage(eventId: state.pathParameters['eventId']!),
+                  ),
+                  GoRoute(
+                    path: 'scan',
+                    builder: (context, state) => ScanPage(eventId: state.pathParameters['eventId']!, role: UserRole.organizer),
+                  ),
                 ],
               ),
             ],
@@ -80,7 +90,16 @@ GoRouter createRouter(AuthController auth, {String? initialLocation}) {
           GoRoute(path: 'committee', builder: (context, state) => const CommitteePage()),
         ],
       ),
-      GoRoute(path: UserRole.committee.homePath, builder: (context, state) => const CommitteeHomePage()),
+      GoRoute(
+        path: UserRole.committee.homePath,
+        builder: (context, state) => const CommitteeHomePage(),
+        routes: [
+          GoRoute(
+            path: 'events/:eventId',
+            builder: (context, state) => ScanPage(eventId: state.pathParameters['eventId']!, role: UserRole.committee),
+          ),
+        ],
+      ),
       GoRoute(
         path: UserRole.attendee.homePath,
         builder: (context, state) => const AttendeeHomePage(),
