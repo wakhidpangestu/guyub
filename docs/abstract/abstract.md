@@ -3,8 +3,8 @@
 **Guyub: An All-in-One Operations Platform for Community & Student Event Orchestration**
 
 **Selected Case:** Case 2: Stronger Communities and Everyday Services
-**Team Name:** [Team Name]
-**Team Members:** [Member 1 Name (Lead), Member 2 Name, Member 3 Name]
+**Team Name:** Lah  
+**Team Members:** [Wakhid Pangestu (Lead), Rendy Setiawan, Ahmad Dandi Subhani, Rafi Budiansyah]
 
 ---
 
