@@ -16,6 +16,7 @@ class StreamView<T> extends StatefulWidget {
     this.isEmpty,
     this.empty,
     this.errorText,
+    this.loading,
   });
 
   final Stream<T> Function() create;
@@ -28,6 +29,9 @@ class StreamView<T> extends StatefulWidget {
   /// When it returns true, [empty] is shown instead of [builder].
   final bool Function(T data)? isEmpty;
   final Widget? empty;
+
+  /// Replaces the spinner while the first value loads.
+  final Widget? loading;
 
   @override
   State<StreamView<T>> createState() => _StreamViewState<T>();
@@ -51,10 +55,11 @@ class _StreamViewState<T> extends State<StreamView<T>> {
         // Waiting means no value yet. Do not use hasData: null is a valid
         // value (for example "this event does not exist").
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Padding(
-            padding: EdgeInsets.all(24),
-            child: Center(child: CircularProgressIndicator()),
-          );
+          return widget.loading ??
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: CircularProgressIndicator()),
+              );
         }
         final data = snapshot.data as T;
         if (widget.isEmpty?.call(data) ?? false) return widget.empty ?? const SizedBox.shrink();
@@ -62,6 +67,32 @@ class _StreamViewState<T> extends State<StreamView<T>> {
       },
     );
   }
+}
+
+/// Like [StreamView], for content that stays on screen while a secondary
+/// stream loads or fails: the builder gets the raw snapshot and decides.
+class LiveValue<T> extends StatefulWidget {
+  const LiveValue({super.key, required this.create, required this.builder, this.streamKey});
+
+  final Stream<T> Function() create;
+  final Widget Function(BuildContext context, AsyncSnapshot<T> snapshot) builder;
+  final Object? streamKey;
+
+  @override
+  State<LiveValue<T>> createState() => _LiveValueState<T>();
+}
+
+class _LiveValueState<T> extends State<LiveValue<T>> {
+  late Stream<T> _stream = widget.create();
+
+  @override
+  void didUpdateWidget(LiveValue<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.streamKey != widget.streamKey) _stream = widget.create();
+  }
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<T>(stream: _stream, builder: widget.builder);
 }
 
 /// Shown in place of content that failed to load.

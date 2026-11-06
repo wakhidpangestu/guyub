@@ -17,7 +17,7 @@ void main() {
     await Harness.signedIn(tester, role: UserRole.committee, orgId: 'himatif', backend: backend);
 
     expect(find.text('Your events'), findsOneWidget);
-    expect(find.text('Tech Talk'), findsOneWidget);
+    expect(find.text('Tech Talk'), findsWidgets);
     expect(find.text('Workshop'), findsNothing);
     expect(find.text('Planned · M4'), findsNothing, reason: 'the scanner is built now');
   });

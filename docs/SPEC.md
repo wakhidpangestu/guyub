@@ -157,7 +157,7 @@ Dynamic QR, built in M3 (`functions/src/tickets.ts`, `apps/dashboard/lib/data/ti
 
 M0–M4 is the 1-week core MVP sprint. M5–M6, polish, and the demo video run until 16 Dec (§0 decision 7).
 
-Status: M0 to M4 done and verified end-to-end on the emulators (`npm run test:smoke`, plus browser runs of every write path, including camera scanning). Next: M5.
+Status: M0 to M4 and the dashboard UI (`design-system/guyub/`) done and verified end-to-end on the emulators (`npm run test:smoke`, plus browser runs of every write path, including camera scanning). Next: M5.
 
 | Milestone | Content | Exit criterion |
 |---|---|---|

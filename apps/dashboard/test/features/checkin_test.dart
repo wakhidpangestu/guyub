@@ -157,7 +157,7 @@ void main() {
       final backend = door();
       await Harness.signedIn(tester, role: UserRole.committee, orgId: 'himatif', uid: 'door', backend: backend);
 
-      await tester.tap(find.text('Tech Talk'));
+      await tester.tap(find.text('Tech Talk').first);
       await tester.pumpAndSettle();
       expect(find.text('Fake scan'), findsOneWidget);
       expect(find.text('1 of 2 checked in'), findsOneWidget);

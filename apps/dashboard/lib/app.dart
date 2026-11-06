@@ -8,11 +8,15 @@ import 'data/backend.dart';
 import 'data/backend_scope.dart';
 import 'routing/app_router.dart';
 import 'ui/theme.dart';
+import 'ui/ui_prefs.dart';
 
 class GuyubApp extends StatefulWidget {
-  const GuyubApp({super.key, required this.authController, required this.backend, this.initialLocation});
+  const GuyubApp({super.key, required this.authController, required this.backend, this.initialLocation, this.prefs});
 
   final AuthController authController;
+
+  /// Saved display choices. Without it, choices last until the app closes.
+  final UiPrefs? prefs;
 
   /// Data access for every page. FirebaseBackend in the app, a fake in tests.
   final Backend backend;
@@ -25,7 +29,11 @@ class GuyubApp extends StatefulWidget {
 }
 
 class _GuyubAppState extends State<GuyubApp> {
+  static final _lightTheme = GuyubTheme.light();
+  static final _darkTheme = GuyubTheme.dark();
+
   late final GoRouter _router = createRouter(widget.authController, initialLocation: widget.initialLocation);
+  late final UiPrefs _prefs = widget.prefs ?? UiPrefs();
 
   /// Last seen session, to detect a role change for the same user.
   SignedIn? _lastSession;
@@ -60,12 +68,19 @@ class _GuyubAppState extends State<GuyubApp> {
       backend: widget.backend,
       child: AuthScope(
         controller: widget.authController,
-        child: MaterialApp.router(
-          title: 'Guyub',
-          debugShowCheckedModeBanner: false,
-          theme: GuyubTheme.light(),
-          darkTheme: GuyubTheme.dark(),
-          routerConfig: _router,
+        child: UiPrefsScope(
+          prefs: _prefs,
+          child: ListenableBuilder(
+            listenable: _prefs,
+            builder: (context, _) => MaterialApp.router(
+              title: 'Guyub',
+              debugShowCheckedModeBanner: false,
+              theme: _lightTheme,
+              darkTheme: _darkTheme,
+              themeMode: _prefs.themeMode,
+              routerConfig: _router,
+            ),
+          ),
         ),
       ),
     );

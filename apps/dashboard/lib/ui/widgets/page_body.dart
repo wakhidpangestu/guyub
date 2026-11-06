@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../tokens.dart';
+
 /// Scrollable page content, centered with a readable max width.
 class PageBody extends StatelessWidget {
   const PageBody({super.key, required this.children, this.maxWidth = 1100});
@@ -9,8 +11,10 @@ class PageBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GuyubTokens.of(context);
+    final gutter = MediaQuery.sizeOf(context).width >= 640 ? tokens.sp(6) : tokens.sp(4);
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(gutter),
       children: [
         Center(
           child: ConstrainedBox(

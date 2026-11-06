@@ -39,8 +39,14 @@ Read `docs/SPEC.md` first. Its §0 decision log is locked. Setup and run steps a
   - Door screen (`lib/features/checkin/scan_page.dart`) for committee (`/committee/events/:id`) and organizers (`/organizer/events/:id/scan`): camera via `mobile_scanner` (BarcodeDetector or zxing-wasm on the web), a code field that also takes USB scanners, a result card per outcome, a live counter, recent check-ins.
   - Organizer attendance page (`/organizer/events/:id/attendance`): live list, search, filter, manual check-in.
   - Committee event tiles open the door screen (audit L1).
+- **Dashboard UI and design system:**
+  - Tokens in `design-system/guyub/tokens.css`, mirrored in `lib/ui/tokens.dart`; a test fails when they drift. Read `design-system/guyub/MASTER.md` before changing UI.
+  - `RoleShell`: sidebar from 960 wide, drawer below, header with theme toggle and account menu. Pages switch without a transition.
+  - Role homes are `DashboardGrid`s of draggable cards (`lib/ui/dashboard/`). Numbers come from real data. Planned features stay labelled.
+  - Rearranging works by mouse, touch long press, Alt + arrows, the Arrange dialog, and screen reader actions. The order is saved per person in `shared_preferences` (`UiPrefs`).
+  - The React references were ported to Dart. There is no shadcn, Tailwind, or npm in the dashboard.
 - **Dev tooling:** root dev deps (`npx firebase`), `npm run emulators` with saved data, `npm run seed` (demo accounts, events, assignment, ticket), `scripts/dev.ps1`. Tests run on separate ports (`firebase.test.json`) so they never touch dev data.
-- **Tests:** functions 51, Flutter 118, rules 71, smoke 36. All passing. `flutter analyze` clean.
+- **Tests:** functions 51, Flutter 236, rules 71, smoke 36. All passing. `flutter analyze` clean.
 
 ## Verified end-to-end (emulators, headless Chrome, release build)
 
@@ -60,6 +66,12 @@ Read `docs/SPEC.md` first. Its §0 decision log is locked. Setup and run steps a
   - Pasting a code into the field checks in; a non-ticket shows "Not a valid ticket".
   - Organizer attendance page shows live state; manual check-in records `check_in_method: manual`.
 
+- Dashboard UI, in a release build with headless Chrome and seeded emulators:
+  - All four roles at desktop and phone widths, in light and dark. The organizer also at tablet width.
+  - Real mouse drags reorder cards, and the order survives a reload (read back from localStorage).
+  - Tab shows the focus ring; Alt + Right moves the card and the browser's default is prevented, so Alt + Left will not go back.
+  - Not tried on a physical phone: touch dragging is covered by widget tests only.
+
 ## Next, in order (SPEC §7)
 
 1. **M5:** Certificate function and email on check-in. Batch sends (Gmail SMTP caps). Certificate template stays private (audit L6).
@@ -74,11 +86,11 @@ Every new collection or rule change needs a case in `tests/rules/`. Every new ca
 - Organizations cannot be disabled. Enforcing a disabled org in rules costs one extra read per request; decide before adding.
 - Event banner upload is not in the UI yet (Storage rules are ready).
 - Only attendee accounts register. Letting organizer and committee accounts attend other orgs' events needs a decision on the one-role-per-account model.
-- Organizers cannot see the list of registrants yet (count only). Planned with M4 attendance view.
 - Demo access for judges: Google-only sign-in means judges sign in as attendees. Organizer and committee demo needs `set-role` on their account, or pre-made demo accounts.
-- Retention purge (12 months) is not written.
 - Email provider: Trigger Email extension vs Nodemailer. SPEC §0 decision 2 allows either.
 - Sheets export auth model: service account vs user OAuth.
+- `--destructive` under its foreground is 3.6:1, below 4.5:1 for button labels. The token is unchanged; see `design-system/guyub/MASTER.md`. The team should decide whether to darken it.
+- Sign-in in the headless test browser sometimes stalls on "Signing in…" after picking an account in the emulator's popup. It passed on retry with longer waits and has not been root-caused. It has not been tried on real Google sign-in.
 - Abstract is handled by a teammate. Do not edit `docs/abstract/` unless asked.
 
 ## Conventions

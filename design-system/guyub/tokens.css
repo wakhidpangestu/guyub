@@ -1,0 +1,147 @@
+/*
+ * Guyub design tokens: the single source of truth.
+ *
+ * The Flutter dashboard mirrors these values in apps/dashboard/lib/ui/tokens.dart,
+ * and test/ui/tokens_test.dart fails when the two drift apart. The Next.js
+ * landing page can import this file directly (Tailwind v4 `@theme inline`).
+ */
+:root {
+  --card: hsl(0, 0%, 100%);
+  --ring: hsl(263, 70%, 50%);
+  --input: hsl(220, 13%, 91%);
+  --muted: hsl(220, 14%, 96%);
+  --accent: hsl(263, 80%, 96%);
+  --border: hsl(220, 13%, 91%);
+  --radius: 1rem;
+  --chart-1: hsl(263, 70%, 50%);
+  --chart-2: hsl(190, 90%, 45%);
+  --chart-3: hsl(150, 60%, 40%);
+  --chart-4: hsl(280, 65%, 60%);
+  --chart-5: hsl(330, 80%, 60%);
+  --popover: hsl(0, 0%, 100%);
+  --primary: hsl(256 45% 54%);
+  --sidebar: hsl(0, 0%, 100%);
+  --spacing: 0.25rem;
+  --font-mono: JetBrains Mono, monospace;
+  --font-sans: Plus Jakarta Sans, Inter, system-ui, sans-serif;
+  --secondary: hsl(263, 20%, 94%);
+  --background: hsl(210, 40%, 98%);
+  --font-serif: Georgia, serif;
+  --foreground: hsl(224, 71%, 4%);
+  --destructive: hsl(0, 84%, 60%);
+  --shadow-blur: 30px;
+  --shadow-color: hsl(263, 70%, 50%);
+  --sidebar-ring: hsl(263, 70%, 50%);
+  --shadow-spread: 0px;
+  --letter-spacing: -0.02em;
+  --shadow-opacity: 0.08;
+  --sidebar-accent: hsl(263, 20%, 94%);
+  --sidebar-border: hsl(220, 13%, 91%);
+  --card-foreground: hsl(224, 71%, 4%);
+  --shadow-offset-x: 0px;
+  --shadow-offset-y: 8px;
+  --sidebar-primary: hsl(263, 70%, 50%);
+  --muted-foreground: hsl(220, 9%, 46%);
+  --accent-foreground: hsl(263, 70%, 50%);
+  --popover-foreground: hsl(224, 71%, 4%);
+  --primary-foreground: hsl(210, 40%, 98%);
+  --sidebar-foreground: hsl(224, 71%, 4%);
+  --secondary-foreground: hsl(263, 70%, 30%);
+  --destructive-foreground: hsl(210, 40%, 98%);
+  --sidebar-accent-foreground: hsl(263, 70%, 50%);
+  --sidebar-primary-foreground: hsl(210, 40%, 98%);
+}
+
+.dark {
+  --card: hsl(260, 25%, 4%);
+  --ring: hsl(263, 85%, 65%);
+  --input: hsl(260, 20%, 15%);
+  --muted: hsl(260, 20%, 12%);
+  --accent: hsl(263, 60%, 15%);
+  --border: hsl(260, 20%, 15%);
+  --radius: 1rem;
+  --chart-1: hsl(263, 85%, 65%);
+  --chart-2: hsl(190, 80%, 55%);
+  --chart-3: hsl(150, 70%, 50%);
+  --chart-4: hsl(280, 80%, 70%);
+  --chart-5: hsl(330, 90%, 65%);
+  --popover: hsl(260, 25%, 5%);
+  --primary: hsl(263, 85%, 65%);
+  --sidebar: hsl(260, 25%, 3%);
+  --spacing: 0.315rem;
+  --font-mono: Consolas, monospace;
+  --font-sans: Public Sans, sans-serif;
+  --secondary: hsl(263, 40%, 15%);
+  --background: hsl(260, 25%, 2%);
+  --font-serif: Artifika, serif;
+  --foreground: hsl(210, 40%, 98%);
+  --destructive: hsl(0, 84%, 60%);
+  --shadow-blur: 30px;
+  --shadow-color: hsl(0, 0%, 0%);
+  --sidebar-ring: hsl(263, 85%, 65%);
+  --shadow-spread: 12px;
+  --letter-spacing: -0.015em;
+  --shadow-opacity: 0.46;
+  --sidebar-accent: hsl(263, 40%, 12%);
+  --sidebar-border: hsl(260, 20%, 12%);
+  --card-foreground: hsl(210, 40%, 98%);
+  --shadow-offset-x: 10px;
+  --shadow-offset-y: 20px;
+  --sidebar-primary: hsl(263, 85%, 65%);
+  --muted-foreground: hsl(260, 10%, 70%);
+  --accent-foreground: hsl(263, 85%, 65%);
+  --popover-foreground: hsl(210, 40%, 98%);
+  --primary-foreground: hsl(260, 25%, 2%);
+  --sidebar-foreground: hsl(210, 40%, 98%);
+  --secondary-foreground: hsl(263, 85%, 85%);
+  --destructive-foreground: hsl(210, 40%, 98%);
+  --sidebar-accent-foreground: hsl(263, 85%, 65%);
+  --sidebar-primary-foreground: hsl(260, 25%, 2%);
+}
+
+@theme inline {
+  --color-card: var(--card);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+  --color-radius: var(--radius);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-popover: var(--popover);
+  --color-primary: var(--primary);
+  --color-sidebar: var(--sidebar);
+  --color-spacing: var(--spacing);
+  --color-font-mono: var(--font-mono);
+  --color-font-sans: var(--font-sans);
+  --color-secondary: var(--secondary);
+  --color-background: var(--background);
+  --color-font-serif: var(--font-serif);
+  --color-foreground: var(--foreground);
+  --color-destructive: var(--destructive);
+  --color-shadow-blur: var(--shadow-blur);
+  --color-shadow-color: var(--shadow-color);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-shadow-spread: var(--shadow-spread);
+  --color-letter-spacing: var(--letter-spacing);
+  --color-shadow-opacity: var(--shadow-opacity);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-card-foreground: var(--card-foreground);
+  --color-shadow-offset-x: var(--shadow-offset-x);
+  --color-shadow-offset-y: var(--shadow-offset-y);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+}

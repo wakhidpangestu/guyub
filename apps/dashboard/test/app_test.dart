@@ -55,7 +55,7 @@ void main() {
       await pumpApp(tester);
       await signIn(tester, role);
 
-      expect(find.text('Welcome, Rina'), findsOneWidget);
+      expect(find.text('Welcome back, Rina'), findsOneWidget);
       expect(find.widgetWithText(Chip, role.label), findsOneWidget);
     });
   }
@@ -64,7 +64,7 @@ void main() {
     await pumpApp(tester);
     await signIn(tester, UserRole.organizer);
 
-    GoRouter.of(tester.element(find.text('Welcome, Rina'))).go('/admin');
+    GoRouter.of(tester.element(find.text('Welcome back, Rina'))).go('/admin');
     await tester.pumpAndSettle();
 
     expect(find.text('No access to this area'), findsOneWidget);
@@ -72,7 +72,7 @@ void main() {
 
     await tester.tap(find.text('Go to my dashboard'));
     await tester.pumpAndSettle();
-    expect(find.text('Welcome, Rina'), findsOneWidget);
+    expect(find.text('Welcome back, Rina'), findsOneWidget);
   });
 
   // Shared committee laptops: after sign-out the login URL still remembers the
@@ -115,7 +115,7 @@ void main() {
   testWidgets('a different user signing in does not trigger the role-change jump', (tester) async {
     await pumpApp(tester);
     await signIn(tester, UserRole.attendee);
-    GoRouter.of(tester.element(find.text('Welcome, Rina'))).go('/admin');
+    GoRouter.of(tester.element(find.text('Welcome back, Rina'))).go('/admin');
     await tester.pumpAndSettle();
     expect(find.text('No access to this area'), findsOneWidget);
 

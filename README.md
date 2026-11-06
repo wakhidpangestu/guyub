@@ -226,12 +226,25 @@ Rules to notice while testing:
 
 ---
 
+### Try the dashboard
+
+Each role's home is a bento dashboard with real data. Stop `flutter run` and start it again after pulling this: it adds a package and bundled fonts, so a hot restart is not enough.
+
+1. Sign in as `organizer@guyub.test`. Drag a card to another place. Reload the page: the order stays. It is saved per person, in this browser.
+2. On a touch screen, press and hold a card, then drag. A normal swipe still scrolls.
+3. With the keyboard, press Tab to a card, hold Alt, and press an arrow key.
+4. Press **Arrange** to move cards with buttons, or to reset the order.
+5. Use the moon or sun button in the header to switch theme, and the panel button to collapse the sidebar.
+6. Make the window narrow: the sidebar becomes a drawer, and the cards reflow down to two columns.
+
+Colors, fonts, and rules are in `design-system/guyub/MASTER.md`.
+
 ## Tests
 
 | Command | What it checks | Needs |
 |---|---|---|
 | `npm --prefix functions test` | Roles, invites, registration, check-in decisions, QR signing, retention (51 tests) | Node |
-| `cd apps/dashboard; flutter test` | Routing, auth, every page with a fake backend, QR rotation, scanner (118 tests) | Flutter |
+| `cd apps/dashboard; flutter test` | Routing, auth, every page with a fake backend, QR rotation, scanner, design tokens, drag grid, dashboards at 6 screen sizes in both themes (236 tests) | Flutter |
 | `npm run test:rules` | Firestore and Storage security rules (71 tests) | Java |
 | `npm run test:smoke` | End-to-end on the emulators: roles, invites, registration under load, check-in, retention (36 tests) | Java |
 | `npm test` | Functions, rules, and smoke tests together | Java |
@@ -327,6 +340,7 @@ firestore.rules     Firestore security rules
 storage.rules       Storage security rules
 firebase.json       Firebase config, emulator ports, hosting
 firebase.test.json  Same, on separate ports for tests
+design-system/      Design tokens (tokens.css) and UI rules
 docs/               Spec, handoff notes, abstract drafts
 ```
 
@@ -342,6 +356,7 @@ Implemented and verified on the emulators:
 
 - **M3:** attendees browse upcoming events from every organization, register after accepting a privacy notice, cancel before check-in, and keep their tickets. Capacity is enforced on the server. Tickets show a QR code that changes every 30 seconds, so screenshots expire.
 - **M4:** committee and organizers check people in at the door with the camera, a typed or pasted code, or a USB scanner. Each outcome has its own message (checked in, already in, expired, invalid, other event, not registered, closed). Organizers follow attendance live and can check someone in by hand. Check-in only happens through a Cloud Function that verifies the code.
+- **Dashboard UI:** each role has a colorful, responsive dashboard with a sidebar, real numbers, and cards that can be rearranged by mouse, touch, keyboard, or buttons. Light and dark themes follow `design-system/guyub/`.
 - **Audit fixes:** see `docs/AUDIT.md`. Ticket keys are readable only by their owner, attendance data is deleted 12 months after the event, and attendee emails are not shared with organizers.
 
 Not implemented yet (shown as "Planned" cards in the app): certificates, Sheets export, twibbon, platform metrics, landing page. See `docs/SPEC.md` §7.
@@ -353,7 +368,8 @@ Known limitations:
 - Invites are not emailed. The organizer tells the person to sign in with that Google account.
 - Organizations cannot be disabled yet.
 - Event banners are not uploaded from the app yet.
+- The dashboard card order is saved per browser. It does not follow a person between devices.
 
 ## AI assistance disclosure
 
-Required by the STACK 2026 handbook. Claude Code (Anthropic) was used to scaffold the repository and to write the security rules, Cloud Functions, auth and routing code, tests, dev scripts, and documentation. The team reviews, tests, and is responsible for all code.
+Required by the STACK 2026 handbook. Claude Code (Anthropic) was used to scaffold the repository and to write the security rules, Cloud Functions, auth and routing code, dashboard UI, tests, dev scripts, and documentation. The team reviews, tests, and is responsible for all code.

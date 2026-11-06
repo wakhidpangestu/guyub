@@ -45,6 +45,7 @@ dependencies:
   qr_flutter: ^4.1.0
   crypto: ^3.0.8
   mobile_scanner: ^7.5.0
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:
@@ -67,6 +68,42 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Static instances: Flutter does not map FontWeight onto a variable font's
+  # wght axis on its own. See assets/fonts/README.md.
+  fonts:
+    - family: Plus Jakarta Sans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/PlusJakartaSans-Bold.ttf
+          weight: 700
+    - family: Public Sans
+      fonts:
+        - asset: assets/fonts/PublicSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/PublicSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/PublicSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/PublicSans-Bold.ttf
+          weight: 700
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/JetBrainsMono-SemiBold.ttf
+          weight: 600
+
+  # The Open Font License asks for its text to travel with the fonts.
+  assets:
+    - assets/fonts/licenses/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

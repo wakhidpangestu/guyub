@@ -7,6 +7,7 @@ import 'auth/firebase_auth_repository.dart';
 import 'config/firebase_bootstrap.dart';
 import 'data/firebase_backend.dart';
 import 'ui/config_error_app.dart';
+import 'ui/ui_prefs.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,5 +22,6 @@ Future<void> main() async {
     return;
   }
 
-  runApp(GuyubApp(authController: AuthController(FirebaseAuthRepository()), backend: FirebaseBackend()));
+  final prefs = await UiPrefs.load();
+  runApp(GuyubApp(authController: AuthController(FirebaseAuthRepository()), backend: FirebaseBackend(), prefs: prefs));
 }

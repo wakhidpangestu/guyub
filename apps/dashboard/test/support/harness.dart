@@ -25,13 +25,15 @@ class Harness {
     FakeBackend? backend,
     String uid = 'u1',
     String name = 'Rina',
+    // Below the sidebar breakpoint, so feature tests only see page content.
+    Size size = const Size(900, 1000),
   }) async {
     final auth = FakeAuthRepository();
     final controller = AuthController(auth);
     final harness = Harness._(auth, backend ?? FakeBackend(), controller);
     addTearDown(controller.dispose);
 
-    tester.view.physicalSize = const Size(1280, 1000);
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 

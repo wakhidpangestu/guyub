@@ -20,7 +20,7 @@ class StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final (background, foreground, icon) = switch (status) {
-      EventStatus.draft => (scheme.surfaceContainerHighest, scheme.onSurfaceVariant, Icons.edit_note),
+      EventStatus.draft => (scheme.surfaceContainerHighest, scheme.onSurface, Icons.edit_note),
       EventStatus.active => (scheme.primaryContainer, scheme.onPrimaryContainer, Icons.public),
       EventStatus.completed => (scheme.secondaryContainer, scheme.onSecondaryContainer, Icons.task_alt),
     };
